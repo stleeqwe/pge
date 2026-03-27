@@ -21,18 +21,21 @@ You won't catch these in code review. You'll catch them in production.
 Every backend change goes through three phases:
 
 ```
-         /preflight                              /evaluate
-             │                                       │
-   ┌─────────▼──────────┐  ┌──────────────┐  ┌──────▼──────────┐
-   │      PLANNER       │  │  GENERATOR   │  │    EVALUATOR    │
-   │                    │  │              │  │                 │
-   │ Read dependency map│─▶│ Execute in   │─▶│ Fresh context   │
-   │ Trace blast radius │  │ strict order │  │ Run ALL queries │
-   │ Write Sprint       │  │ Server check │  │ Walk dep map    │
-   │ Contract           │  │ before client│  │ Devil's advocate│
-   └────────────────────┘  └──────────────┘  └─────────────────┘
-                                                     │
-                                              PASS / FAIL
+                            /pge
+                              │
+   ┌──────────────────────────▼──────────────────────────────┐
+   │                                                          │
+   │  ┌────────────┐   ┌────────────┐   ┌────────────────┐  │
+   │  │  PLANNER   │──▶│ GENERATOR  │──▶│   EVALUATOR    │  │
+   │  │            │   │            │   │                │  │
+   │  │ Dependency │   │ Strict     │   │ Fresh context  │  │
+   │  │ map + blast│   │ order +    │   │ Run ALL queries│  │
+   │  │ radius     │   │ server     │   │ Walk dep map   │  │
+   │  │ = Contract │   │ checkpoint │   │ Devil's advoc. │  │
+   │  └────────────┘   └────────────┘   └────────────────┘  │
+   │                                            │            │
+   └────────────────────────────────────────────┼────────────┘
+                                         PASS / FAIL
 ```
 
 **The evaluator runs in a separate agent with fresh context** — it doesn't know what the generator intended, only what it produced. This defeats the self-evaluation bias that makes AI miss its own mistakes.
@@ -61,9 +64,8 @@ That's it. PGE activates automatically on backend tasks.
 your-project/
 ├── .claude/
 │   ├── commands/
-│   │   ├── preflight.md   # /preflight — Sprint Contract generator
-│   │   ├── evaluate.md    # /evaluate  — Independent verification
-│   │   └── pge.md         # /pge       — Full protocol (forced mode)
+│   │   ├── pge.md         # /pge      — Full protocol (single agent)
+│   │   └── pge-team.md    # /pge-team — Full protocol (team investigation)
 │   └── pge/               # Ephemeral state (gitignored)
 │       ├── contract.md
 │       ├── result.md
@@ -81,7 +83,7 @@ your-project/
 Claude decides what level of rigor is needed:
 
 ```
-"Add color field to items"        → /preflight → Generator → /evaluate
+"Add color field to items"        → Quick fix (autonomous)
 "Fix this button color"           → Quick fix → test → analyze
 "Why is the chat list slow?"      → Investigate → fix → test
 ```
@@ -106,7 +108,7 @@ Each phase has **mandatory outputs** — Claude cannot skip ahead.
 ### Path A: Direct Backend Task
 
 ```
-"add X to Y" → /preflight → Generator → /evaluate
+"add X to Y /pge" → Planner → Generator → Evaluator (all within /pge)
 ```
 
 The generator executes in strict order with a **server boundary checkpoint** — it verifies the deployment works before touching client code.

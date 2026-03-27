@@ -1,10 +1,10 @@
-# /pge — Full PGE Protocol (강제 모드)
+# /pge — PGE Full Protocol (Planner-Generator-Evaluator)
 
 사용자가 작업 요청에 `/pge`를 붙이면 전체 PGE 프로토콜을 강제 실행한다.
 
 ## Input
 
-$ARGUMENTS — 작업 설명 (e.g., "팔로워 끊으면 상대방 갱신 안됨", "items에 color 추가")
+$ARGUMENTS — 작업 설명
 
 ## Task Type Detection
 
@@ -24,7 +24,7 @@ $ARGUMENTS — 작업 설명 (e.g., "팔로워 끊으면 상대방 갱신 안됨
 
 #### Phase 1: Root Cause Investigation
 1. 사용자가 제공한 증상/로그를 정리
-2. 관련 코드 경로를 Read로 추적 (Explore 사용 가능)
+2. 관련 코드 경로를 Read로 추적
 3. `git log --oneline -20 -- <affected-files>` 실행
 4. 재현 가능 여부 판단
 
@@ -37,7 +37,6 @@ Affected files: [파일 목록]
 이 출력이 없으면 다음 단계로 진행 불가.
 
 #### Phase 2: Pattern Analysis
-아래 패턴 테이블과 대조하여 매칭 결과를 출력:
 
 | Pattern | Signature | Match? |
 |---------|-----------|--------|
@@ -66,10 +65,10 @@ Backend change needed: {Y/N}
 
 ### STEP 2: 분기
 
-- **Backend change needed: Y** → /preflight 실행 → Generator (13-step) → /evaluate 실행
+- **Backend change needed: Y** → Phase 1: Planner → Phase 2: Generator → Phase 3: Evaluator
 - **Backend change needed: N** → Fix → Test → Analyze → Debug Report 출력
 
-### STEP 3: Debug Report (Investigation 완료 시)
+### STEP 3: Debug Report
 ```
 DEBUG REPORT
 ════════════════════════════════════════
@@ -87,14 +86,244 @@ Status:          DONE | DONE_WITH_CONCERNS | BLOCKED
 
 ## Direct Task Mode
 
-### STEP 1: /preflight
-Sprint Contract 생성 (Phase 1: Planner)
+### Phase 1: Planner — Sprint Contract 생성
 
-### STEP 2: Generator
-13-step 실행 순서 따름. Server Boundary Checkpoint 필수.
+#### Step 1: Identify Affected Resources
 
-### STEP 3: /evaluate
-독립 Evaluator Agent로 검증 (Phase 3)
+1. Read `docs/backend-dependency-map.md`.
+2. From the task description, identify all **affected tables/resources**.
+3. For each, extract the full dependency chain:
+   - Access policies
+   - Server functions (read + write)
+   - Views / aggregations
+   - Server-side functions (endpoints)
+   - Triggers / hooks
+   - Client services / state management
+   - Real-time subscriptions
+   - Foreign keys / cascades
+4. Check whether any **cross-domain impact chains** apply.
+
+#### Step 2: Verify Current State
+
+5. Read the **actual current code** of identified functions, views, and endpoints.
+6. Cross-verify that the dependency map matches current code. Flag discrepancies.
+
+#### Step 3: Write Sprint Contract
+
+Write to `.claude/pge/contract.md` AND display:
+
+```markdown
+# Sprint Contract: {task description}
+Generated: {ISO timestamp}
+
+## 1. Scope
+
+### What Changes
+| # | Layer | Target | Change | File |
+|---|-------|--------|--------|------|
+| 1 | Schema | ... | ... | ... |
+
+### What Does NOT Change (Blast Radius Boundary)
+- {dependency}: {why it's safe} → no change needed
+
+## 2. Acceptance Criteria
+
+Each criterion MUST have a specific, runnable verification command.
+
+### Schema Verification
+- [ ] `{query}` → Expected: {result}
+
+### Function Verification
+- [ ] `{query}` → Expected: {result}
+
+### Access Policy Verification
+- [ ] `{query}` → Expected: {result}
+
+### Regression Checks (things that must NOT break)
+- [ ] `{most fragile query}` → Expected: {normal result}
+
+### Code Quality Verification
+- [ ] No SQL string interpolation (use parameterized queries)
+- [ ] Status transitions use atomic WHERE clause
+- [ ] New enum values handled by all consumers
+
+### Tests & Deploy
+- [ ] All tests pass
+- [ ] Static analysis clean
+- [ ] Migrations applied
+- [ ] Server functions deployed (if applicable)
+
+## 3. Failure Criteria
+- {symptom} → {root cause}
+
+## 4. Affected Domains
+- [ ] {domain list}
+
+## 5. Cross-Domain Chains
+(from dependency map)
+
+## 6. Change Order
+1. Schema
+2. Policies
+3. Functions
+4. Views
+5. Server functions
+6. Apply migrations / deploy
+7. Client models
+8. Client services
+9. State management
+10. UI
+11. Tests
+12. Static analysis
+```
+
+#### Step 4: Complexity Gate
+
+If **8+ files** in "What Changes":
+- Challenge: can this be split?
+- If not: `Complexity: HIGH — N files, cannot be reduced because [reason]`
+
+#### Planner Rules
+
+- Every acceptance criterion MUST be a runnable command, not a vague statement.
+- Always include your most fragile query as a regression check.
+- Never underestimate impact. **Overestimation is safer.**
+- Views typically require DROP + CREATE when columns change.
+- Note new dependencies for post-task map update.
+
+Contract 출력 후 **즉시 Phase 2 진행**. 사용자 승인 불필요.
+
+---
+
+### Phase 2: Generator — 실행
+
+Sprint Contract의 Change Order를 따라 실행.
+
+**Server Boundary Checkpoint** (deploy 후):
+- Acceptance criteria에서 1-2개 핵심 쿼리 실행
+- 실패 시 STOP → 서버 수정 → 재배포
+- 클라이언트 코드는 서버 검증 후에만 진행
+
+**Rollback Protocol** (배포 실패 시):
+- **Migration failure**: repair command, fix SQL, re-apply
+- **Partial migration**: Do NOT rollback successful ones. Fix failing and re-apply.
+- **Server function deploy failure**: Previous version active. Fix and re-deploy.
+- **Both server + client modified**: Server rollback first, then revert client.
+
+완료 후 **Result Manifest** → `.claude/pge/result.md`:
+- 변경 파일 목록 + 설명
+- 배포 결과
+- 테스트 결과
+- 취약 부분 자체 평가
+- **Noticed Issues** (scope 밖): 비관련 이슈 기록
+
+---
+
+### Phase 3: Evaluator — 독립 검증
+
+**Agent subagent을 fresh context로 스폰**.
+
+Evaluator Agent 프롬프트:
+
+```
+You are the EVALUATOR in a Planner-Generator-Evaluator workflow.
+
+YOUR ROLE: Independently verify that implementation work is complete and correct.
+You are checking SOMEONE ELSE's work. Be skeptical. Do NOT assume correctness.
+
+## Inputs (read these files first)
+1. Sprint contract: .claude/pge/contract.md
+2. Result manifest: .claude/pge/result.md
+3. Dependency map: docs/backend-dependency-map.md
+
+## Verification Process
+
+### A. Run ALL Acceptance Criteria
+Execute each verification command. Compare actual vs expected. Record: PASS / FAIL / UNEXPECTED.
+
+### B. Dependency Map Walk
+For each affected resource, verify all dependencies:
+
+**Layer 1 — Database**: functions, views, triggers, constraints, indexes, policies
+**Layer 2 — Server**: endpoint code reads, API response verification
+**Layer 3 — Client**: models match schema, services query correctly, state management invalidates properly
+**Layer 4 — Cross-cutting**: "What Does NOT Change" confirmed, real-time payloads verified, generated files fresh
+
+### C. Devil's Advocate Checklist
+1. What dependency was most likely skipped?
+2. Is the most fragile query still working? (Run it.)
+3. Were views DROP'd before recreate?
+4. New fields missing from dependency map?
+5. Actually deployed, or just wrote code?
+6. Could this silently break access policies?
+7. Migration handles existing data? (NOT NULL needs DEFAULT.)
+
+### D. Anti-Pattern Check
+| Anti-Pattern | How to Detect |
+|---|---|
+| "Verified" without running queries | No query output in manifest |
+| Updated function but not dependent view | View query errors |
+| Changed real-time table without checking client | Client parsing breaks |
+| Updated model but didn't regenerate | Generated files stale |
+| Migration uses IF EXISTS defensively | Hides real errors |
+| SQL string interpolation | Grep for string templates |
+| TOCTOU race in status transitions | No atomic WHERE |
+| New enum not handled by all consumers | Grep sibling values |
+| Fix without root cause investigation | Manifest lacks "Root cause:" |
+
+### D-bis. Code Quality Review
+- [ ] No conditional side effects
+- [ ] No stale comments
+- [ ] No test gaps
+- [ ] No performance regressions
+
+### D-ter. Scope Drift Detection
+Compare contract scope vs actual changes. Flag SCOPE CREEP or INCOMPLETE.
+
+### E. Domain-Specific Review Checklist
+<!-- PROJECT-SPECIFIC: Add your domain checklists here -->
+Run for every affected domain with actual queries.
+
+### F. Score 5 Dimensions (1-10)
+1. Schema Integrity
+2. Security / Access Policies (**HARD FAIL if < 6**)
+3. Dependency Consistency (**HARD FAIL if < 6**)
+4. Test Coverage
+5. Deployment Completeness
+
+### G. Verdict
+- **PASS**: All ≥ 7
+- **CONDITIONAL PASS**: All ≥ 6, some < 7
+- **FAIL**: Any hard-fail < 6
+
+### H. Write Report
+Write to .claude/pge/eval.md. Return verdict + key findings.
+```
+
+#### Evaluator 결과 처리
+
+- **PASS**: Archive → 완료
+- **CONDITIONAL PASS**: 수정 → Archive → 완료 (재검증 불필요)
+- **FAIL**: 수정 → Evaluator 재실행 (fresh context)
+
+#### Archive
+
+`.claude/pge/history/{YYYYMMDD}T{HHMM}_{task-slug}.md`:
+```markdown
+# {task description}
+Date: {ISO timestamp}
+Verdict: {verdict}
+Scores: Schema:{n} Security:{n} Deps:{n} Tests:{n} Deploy:{n}
+
+## Scope / Blast Radius / Issues Found / Key Decisions
+```
+
+#### Evaluator Rules
+
+- **반드시 fresh context Agent subagent**으로 실행
+- **실제 쿼리 실행** 필수
+- "I assume it works" 불가
+- FAIL → fix → re-evaluate 시 fresh context 재생성
 
 ---
 
@@ -103,8 +332,8 @@ Sprint Contract 생성 (Phase 1: Planner)
 ### STEP 1: Pre-Landing Review Checklist
 
 **Pass 1 — CRITICAL:**
-- [ ] SQL injection (string interpolation in queries)
-- [ ] TOCTOU races (non-atomic status transitions)
+- [ ] SQL injection
+- [ ] TOCTOU races
 - [ ] LLM output trust boundary
 - [ ] Enum completeness
 
@@ -112,22 +341,22 @@ Sprint Contract 생성 (Phase 1: Planner)
 - [ ] Conditional side effects
 - [ ] Dead code / stale comments
 - [ ] Test gaps
-- [ ] Performance (N+1 queries)
+- [ ] Performance (N+1)
 
 **Fix-First Heuristic:**
 - AUTO-FIX: dead code, N+1, stale comments, magic numbers
 - ASK: security, race conditions, design decisions, >20 lines
 
-### STEP 2: /evaluate (Phase 3 only)
+### STEP 2: Evaluator (Phase 3 only)
 Domain-specific checklists로 검증
 
 ### STEP 3: 이슈 발견 시
-자동으로 Direct Task Mode 전환 → /preflight → Generator → /evaluate
+자동 Direct Task Mode 전환 → Planner → Generator → Evaluator
 
 ---
 
 ## Important Rules
 
-- 각 Phase의 **필수 출력**이 없으면 다음 Phase로 진행하지 말 것
-- `/pge`가 붙은 작업은 **어떤 경우에도 프로토콜을 스킵하지 않음**
-- Escalation Rules 적용: 3-strike, PGE FAIL loop 2+회 시 중단
+- 각 Phase의 **필수 출력**이 없으면 다음 Phase 진행 불가
+- `/pge` 작업은 **프로토콜 스킵 불가**
+- Escalation: 3-strike, PGE FAIL loop 2+회 시 중단

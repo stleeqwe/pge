@@ -116,7 +116,7 @@ Produce a **Sprint Contract** — a testable agreement on what will change and h
    - **Failure criteria**: Symptoms that would indicate breakage
 5. Present the contract as an informational report, then **proceed immediately**.
 
-The `/preflight` skill automates this phase.
+The `/pge` skill includes this phase.
 
 ### Phase 2: Generator (During Work)
 
@@ -178,7 +178,7 @@ The evaluator:
 - **CONDITIONAL PASS**: Fix specific items listed → task complete (no re-evaluation)
 - **PASS**: Task complete
 
-The `/evaluate` skill automates this phase.
+The `/pge` skill includes this phase.
 
 ### State Files & History
 
