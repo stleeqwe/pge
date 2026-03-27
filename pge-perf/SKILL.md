@@ -304,7 +304,19 @@ Baseline metric: [현재 수치]
 ═══════════════════════════════════
 ```
 
-**필수 출력** — `Bottleneck identified`, `Layer`, `Baseline metric`이 없으면 Phase 2 진행 불가.
+### Performance Anti-Pattern Matching
+
+| Pattern | Signature | Match? |
+|---------|-----------|--------|
+| N+1 query | 루프 내 DB 호출, 다수 쿼리 | Y/N |
+| Missing index | Full table scan, slow WHERE | Y/N |
+| SELECT * | 과도한 페이로드, 불필요 컬럼 | Y/N |
+| Sequential await | 직렬 독립 호출, 증가된 레이턴시 | Y/N |
+| Excessive rebuild | 빈번한 setState/rerender | Y/N |
+| Missing pagination | 전체 데이터 로드, OOM 위험 | Y/N |
+| Bundle bloat | 큰 import, 콜드스타트 지연 | Y/N |
+
+**필수 출력** — `Bottleneck identified`, `Layer`, `Baseline metric`, `Anti-pattern match`가 없으면 Phase 2 진행 불가.
 
 ### STEP 4: Shutdown Profiling Team
 
@@ -406,6 +418,22 @@ For each metric in perf-target.md, re-measure using the SAME method:
 - All existing tests still pass?
 - No new errors in logs?
 - No functionality removed to "improve" performance?
+
+### D-bis. Devil's Advocate Checklist (Performance)
+1. 가장 측정이 누락되었을 가능성이 높은 layer는?
+2. Baseline 측정이 신뢰할 수 있는 조건에서 수행되었는가?
+3. 최적화가 기능 회귀를 유발하지 않았는가?
+4. Before/After 측정이 동일 조건인가? (같은 데이터, 같은 파라미터)
+5. 실제 측정했는가, 코드 분석만 했는가?
+
+### D-ter. Anti-Pattern Check (Performance)
+| Anti-Pattern | How to Detect |
+|---|---|
+| "Improved" without measurement | No before/after numbers in result |
+| Optimized query but not client code | Client still fetches excess data |
+| Added index but didn't verify usage | Index not used in EXPLAIN |
+| Claimed latency reduction without repeat measurement | Single run, no median |
+| Removed functionality to "improve" perf | Feature regression |
 
 ### E. Score 5 Dimensions (1-10)
 1. Query Performance — DB 쿼리 개선도
