@@ -1,187 +1,109 @@
 # PGE — Planner-Generator-Evaluator for Claude Code
 
-A drop-in framework that makes Claude Code verify its own backend changes. Plan the blast radius, execute in strict order, then let an independent evaluator agent prove it works.
+Backend consistency skills for [Claude Code](https://claude.ai/code). Plan the blast radius, execute in strict order, verify with an independent evaluator agent.
 
-Born from [Anthropic's PGE harness pattern](https://www.anthropic.com/engineering/harness-design-long-running-apps), adapted for real-world [Claude Code](https://claude.ai/code) workflows.
-
-## The Problem
-
-When Claude Code modifies one part of your backend, other parts silently break:
-
-- RPC function references a renamed column → **500 at runtime**
-- View wasn't DROP'd before recreate → **stale column list**
-- RLS policy doesn't cover the new table → **data leak**
-- Realtime subscription parses old payload shape → **client crash**
-- Migration adds NOT NULL without DEFAULT → **deploy fails on existing data**
-
-You won't catch these in code review. You'll catch them in production.
-
-## The Solution
-
-Every backend change goes through three phases:
-
-```
-                            /pge
-                              │
-   ┌──────────────────────────▼──────────────────────────────┐
-   │                                                          │
-   │  ┌────────────┐   ┌────────────┐   ┌────────────────┐  │
-   │  │  PLANNER   │──▶│ GENERATOR  │──▶│   EVALUATOR    │  │
-   │  │            │   │            │   │                │  │
-   │  │ Dependency │   │ Strict     │   │ Fresh context  │  │
-   │  │ map + blast│   │ order +    │   │ Run ALL queries│  │
-   │  │ radius     │   │ server     │   │ Walk dep map   │  │
-   │  │ = Contract │   │ checkpoint │   │ Devil's advoc. │  │
-   │  └────────────┘   └────────────┘   └────────────────┘  │
-   │                                            │            │
-   └────────────────────────────────────────────┼────────────┘
-                                         PASS / FAIL
-```
-
-**The evaluator runs in a separate agent with fresh context** — it doesn't know what the generator intended, only what it produced. This defeats the self-evaluation bias that makes AI miss its own mistakes.
-
-## Quick Start
+## Install
 
 ```bash
-# From your project root:
-bash <(curl -s https://raw.githubusercontent.com/stleeqwe/pge/main/setup.sh)
-
-# Or clone and run locally:
-git clone https://github.com/stleeqwe/pge.git
-cd your-project
-bash ../pge/setup.sh
+git clone https://github.com/stleeqwe/pge.git /tmp/pge
+bash /tmp/pge/install.sh
+rm -rf /tmp/pge
 ```
 
-Then tell Claude Code:
-
-> Analyze this project and fill in the PGE dependency map and domain checklists
-
-That's it. PGE activates automatically on backend tasks.
-
-## What Gets Installed
-
-```
-your-project/
-├── .claude/
-│   ├── commands/
-│   │   ├── pge.md         # /pge      — Full protocol (single agent)
-│   │   └── pge-team.md    # /pge-team — Full protocol (team investigation)
-│   └── pge/               # Ephemeral state (gitignored)
-│       ├── contract.md
-│       ├── result.md
-│       ├── eval.md
-│       └── history/       # Archived PGE records
-├── docs/
-│   └── backend-dependency-map.md
-└── CLAUDE.md              # PGE protocol section appended
-```
+This installs two global skills to `~/.claude/skills/`. They work in **every project** — no per-project setup needed.
 
 ## Usage
 
-### Default: Autonomous
-
-Claude decides what level of rigor is needed:
+Append `/pge` or `/pge-team` to any task:
 
 ```
-"Add color field to items"        → Quick fix (autonomous)
-"Fix this button color"           → Quick fix → test → analyze
-"Why is the chat list slow?"      → Investigate → fix → test
+# Single agent — full protocol
+fix the follow sync bug /pge
+
+# Team investigation — 3 agents in parallel
+fix the follow sync bug /pge-team
 ```
 
-### Forced: `/pge` Flag
+Without the flag, Claude works autonomously (fast mode).
 
-Append `/pge` to any task to force the full protocol:
+## Skills
 
-```
-"Fix the follow sync bug /pge"
-```
+### `/pge` — Single Agent Protocol
 
-This forces:
-- **Investigation tasks**: 4-phase debugging protocol (symptoms → patterns → hypotheses → scope lock)
-- **Direct tasks**: Full /preflight → Generator → /evaluate cycle
-- **Code review**: 2-pass checklist → /evaluate
+Detects task type and runs the appropriate workflow:
+
+| Task Type | Trigger | Workflow |
+|-----------|---------|---------|
+| Investigation | "bug", "broken", "why", "fix" | 4-phase debugging → Planner → Generator → Evaluator |
+| Direct task | "add", "update", "remove" | Planner → Generator → Evaluator |
+| Code review | "review", "check" | 2-pass checklist → Evaluator |
 
 Each phase has **mandatory outputs** — Claude cannot skip ahead.
 
-## Three Entry Paths
+**Investigation (4-phase Systematic Debugging):**
+1. Root Cause Investigation — symptoms, code trace, git log, reproduce
+2. Pattern Analysis — match against 6 known bug patterns
+3. Hypothesis Testing — 3 strikes → escalate
+4. Scope Lock — backend → full PGE / frontend → quick fix
 
-### Path A: Direct Backend Task
+**Direct Task (Plan → Generate → Evaluate):**
+- Planner reads dependency map, writes Sprint Contract with runnable acceptance criteria
+- Generator executes in strict order with server boundary checkpoint
+- Evaluator runs in fresh agent context, executes actual queries, scores 5 dimensions
 
-```
-"add X to Y /pge" → Planner → Generator → Evaluator (all within /pge)
-```
+### `/pge-team` — Team Investigation
 
-The generator executes in strict order with a **server boundary checkpoint** — it verifies the deployment works before touching client code.
+Same protocol, but spawns a **team of 3 specialist agents** using TeamCreate:
 
-### Path B: Investigation
+| Agent | Role |
+|-------|------|
+| code-tracer | Traces code paths + dependency chains |
+| history-checker | Analyzes git log + PGE history for regressions |
+| state-verifier | Runs live queries to verify DB/server state |
 
-```
-"why is X broken?"
-  Phase 1: Root Cause Investigation  → git log, code trace, reproduce
-  Phase 2: Pattern Analysis          → match against 6 known patterns
-  Phase 3: Hypothesis Testing        → 3 strikes → escalate
-  Phase 4: Scope Lock                → backend? → PGE : quick fix
-```
+Agents share findings via **SendMessage** and converge on root cause before the fix.
 
-### Path C: Code Review
+## First Run
 
-```
-"review this"
-  Pass 1 — CRITICAL:      SQL injection, TOCTOU races, LLM trust, enum completeness
-  Pass 2 — INFORMATIONAL: dead code, test gaps, N+1 queries
-  Fix-First Heuristic:    auto-fix trivial issues, ask for design decisions
-  → /evaluate (domain checklists)
-```
+On first `/pge` in a new project, it auto-creates:
+- `.claude/pge/` — state directory (gitignored)
+- Prompts to generate `docs/backend-dependency-map.md` if missing
+
+The dependency map is updated on every PGE run as new dependencies are discovered.
 
 ## Key Features
 
-### Server Boundary Checkpoint
-After deploying migrations/functions (step 6-7), PGE runs a smoke test before touching client code. Catches server failures early instead of after 13 steps.
+- **Server Boundary Checkpoint** — verify deployment before touching client code
+- **Rollback Protocol** — concrete recovery for partial deployments
+- **Scope Drift Detection** — contract vs actual changes comparison
+- **Complexity Gate** — 8+ files triggers split challenge
+- **Escalation Rules** — 3-strike, 2+ FAILs → stop
+- **Devil's Advocate** — 7 questions targeting the most common mistakes
 
-### Rollback Protocol
-Concrete recovery steps for partial deployments — migration repair, function rollback, server-first recovery order.
+## File Structure
 
-### Scope Drift Detection
-The evaluator compares the Sprint Contract scope against actual changes. Flags scope creep and incomplete implementations.
-
-### Complexity Gate
-If a Sprint Contract lists 8+ files, the planner challenges whether the change can be split smaller.
-
-### Escalation Rules
-3 failed fix attempts → stop. 2+ consecutive evaluator FAILs → stop. Cannot reproduce → stop. No silent loops.
-
-### Devil's Advocate Checklist
-7 questions the evaluator must answer, targeting the most common mistakes:
-1. What dependency was most likely skipped?
-2. Is the most fragile query still working?
-3. Were views DROP'd before recreate?
-4. New columns in the dependency map?
-5. Actually deployed, or just wrote code?
-6. Could this silently break access policies?
-7. Does the migration handle existing data?
-
-## Updating
-
-```bash
-bash path/to/pge/setup.sh --update
 ```
+~/.claude/skills/
+├── pge/
+│   └── SKILL.md       # /pge skill
+└── pge-team/
+    └── SKILL.md       # /pge-team skill
 
-This overwrites skills and replaces the CLAUDE.md PGE section while preserving your project-specific content above it.
-
-## Works With
-
-PGE is backend-agnostic. It works with any stack that has:
-- A database with migrations (Postgres, MySQL, SQLite, Prisma, Drizzle, Django ORM...)
-- Server-side functions (Edge Functions, Lambda, API Routes, Express, FastAPI...)
-- A client layer (React, Next.js, Vue, Flutter, iOS, Android...)
-
-The dependency map and domain checklists are templates — fill them in for your stack.
+your-project/          # Auto-created on first run
+├── .claude/pge/       # Ephemeral state (gitignored)
+│   ├── contract.md
+│   ├── result.md
+│   ├── eval.md
+│   └── history/
+└── docs/
+    └── backend-dependency-map.md
+```
 
 ## Origin
 
-Built for [LEAFIT](https://leafit.app) (Flutter + Supabase), a clothing exchange platform where a single column rename could break 10+ RPCs, 5 admin views, and the real-time chat system.
+Built for [LEAFIT](https://leafit.app) — a clothing exchange platform where a single column rename could break 10+ RPCs, 5 admin views, and the real-time chat system.
 
-After the third time a "simple" migration silently broke `get_chat_list`, we stopped trusting ourselves and built PGE to verify every change with actual SQL queries in an independent agent context.
+Based on [Anthropic's PGE harness pattern](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
 ## License
 
