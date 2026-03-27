@@ -27,7 +27,8 @@ mkdir -p "$PROJECT_DIR/.claude/commands"
 cp "$TEMPLATE_DIR/.claude/commands/preflight.md" "$PROJECT_DIR/.claude/commands/preflight.md"
 cp "$TEMPLATE_DIR/.claude/commands/evaluate.md" "$PROJECT_DIR/.claude/commands/evaluate.md"
 cp "$TEMPLATE_DIR/.claude/commands/pge.md" "$PROJECT_DIR/.claude/commands/pge.md"
-echo "[OK] /preflight, /evaluate, and /pge skills installed"
+cp "$TEMPLATE_DIR/.claude/commands/pge-team.md" "$PROJECT_DIR/.claude/commands/pge-team.md"
+echo "[OK] /preflight, /evaluate, /pge, and /pge-team skills installed"
 
 # 2. Create PGE state directory
 mkdir -p "$PROJECT_DIR/.claude/pge/history"
