@@ -25,10 +25,10 @@ allowed-tools:
 
 # /pge-design — PGE Design Creative Protocol
 
-사용자가 작업 요청에 `/pge-design`을 붙이면 전체 디자인 크리에이티브 프로토콜을 강제 실행한다.
-**기술적 점검(토큰 사용률, 접근성, 상태 처리)은 `/pge-front` 영역.** 이 skill은 미적 판단에 집중.
+When the user appends `/pge-design` to a task request, the full design creative protocol is enforced.
+**Technical checks (token usage, accessibility, state handling) belong to `/pge-front`.** This skill focuses on aesthetic judgment.
 
-## Project Initialization (첫 실행 시)
+## Project Initialization (First Run)
 
 ```bash
 mkdir -p .claude/pge-design/history .claude/pge-design/baselines
@@ -38,109 +38,109 @@ if [ -f .gitignore ] && ! grep -q ".claude/pge-design/" .gitignore 2>/dev/null; 
 fi
 ```
 
-### 플랫폼 자동 감지
+### Automatic Platform Detection
 ```
-Flutter:    Glob pubspec.yaml → "flutter:" 섹션
-React/Next: Glob package.json → "react" 의존성
-Vue/Nuxt:   Glob package.json → "vue" 의존성
+Flutter:    Glob pubspec.yaml → "flutter:" section
+React/Next: Glob package.json → "react" dependency
+Vue/Nuxt:   Glob package.json → "vue" dependency
 ```
-**필수 출력:** `Platform: {Flutter | React | Vue | Unknown}`
+**Required output:** `Platform: {Flutter | React | Vue | Unknown}`
 
-### Design System Map 참조 (읽기 전용)
+### Design System Map Reference (Read-Only)
 
-`docs/design-system-map.md`를 **읽기 전용**으로 참조. 갱신 권한은 `/pge-front`.
-없으면: "Design System Map이 없습니다. `/pge-front`를 먼저 실행하여 생성하세요."
+Reference `docs/design-system-map.md` as **read-only**. Update permissions belong to `/pge-front`.
+If not found: "Design System Map does not exist. Run `/pge-front` first to generate it."
 
 ## CRITICAL: Agent Spawning Rules
 
-1. **TeamCreate** 사용 필수.
-2. **Explore 서브에이전트 사용 금지.** general-purpose만.
-3. **SendMessage로 상호 공유** 필수.
-4. **TaskCreate** 작업 목록 + teammate 할당.
-5. **Phase 1 에이전트는 읽기 전용** — 구현은 Phase 2 team lead만.
+1. **TeamCreate** usage is mandatory.
+2. **Do not use Explore subagents.** General-purpose only.
+3. **Must share via SendMessage** between agents.
+4. **TaskCreate** for task lists + teammate assignment.
+5. **Phase 1 agents are read-only** — only the Phase 2 team lead may implement changes.
 
 ## Input
 
-$ARGUMENTS — 디자인 개선 대상
+$ARGUMENTS — the design improvement target
 
-## 협업 흐름
+## Collaboration Flow
 
 ```
-기존 UI 개선:  /pge-front (점검) → /pge-design (개선) → /pge-front (재점검)
-신규 디자인:   /pge-design (생성) → /pge-front (점검)
+Existing UI improvement:  /pge-front (audit) → /pge-design (improve) → /pge-front (re-audit)
+New design:               /pge-design (create) → /pge-front (audit)
 ```
 
 ---
 
-## 4가지 미적 평가 기준
+## 4 Aesthetic Evaluation Criteria
 
-### Criterion 1: Cohesion (응집도) — "모든 요소가 하나의 이야기를 하는가?"
+### Criterion 1: Cohesion — "Do all elements tell a single story?"
 
-- 색상, 타이포, 레이아웃, 이미지가 통일된 무드/정체성을 형성하는가?
-- 여러 부분의 집합이 아닌 분리 불가한 전체인가?
-- 브랜드 아이덴티티가 모든 화면에서 일관되게 느껴지는가?
-
-**Hard-fail if < 5**
-
-### Criterion 2: Originality (독창성) — "AI 찌꺼기가 아닌가?"
-
-- 커스텀 디자인 결정의 흔적이 있는가?
-- "보라색 그래디언트" 같은 AI 기본 패턴이 아닌가?
-- 브랜드 고유의 시각 언어가 있는가?
-- 경쟁 서비스와 차별화되는 시각적 아이덴티티가 있는가?
-
-### Criterion 3: Craft (완성도) — "디테일이 살아있는가?"
-
-- 타이포그래피 계층이 시선 흐름을 자연스럽게 유도하는가?
-- 색상 하모니가 감정적 의도를 전달하는가?
-- 여백(negative space)이 의도적으로 활용되는가?
-- 미세한 디테일(shadow, radius, transition)에 일관된 철학이 있는가?
+- Do color, typography, layout, and imagery form a unified mood/identity?
+- Is it an inseparable whole rather than a collection of parts?
+- Is the brand identity consistently felt across all screens?
 
 **Hard-fail if < 5**
 
-### Criterion 4: Intuitiveness (직관성) — "3초 안에 이해하는가?"
+### Criterion 2: Originality — "Is this more than AI slop?"
 
-- 시선 흐름이 자연스럽게 핵심 CTA로 향하는가?
-- 정보 계층이 명확하여 스캔이 가능한가?
-- 사용자가 어떤 동작을 해야 하는지 추측 없이 알 수 있는가?
+- Are there traces of custom design decisions?
+- Is it free from default AI patterns like "purple gradients"?
+- Does it have a visual language unique to the brand?
+- Does it have a visual identity that differentiates it from competing services?
+
+### Criterion 3: Craft — "Are the details alive?"
+
+- Does the typographic hierarchy naturally guide the eye flow?
+- Does the color harmony convey emotional intent?
+- Is negative space used intentionally?
+- Is there a consistent philosophy in fine details (shadow, radius, transition)?
+
+**Hard-fail if < 5**
+
+### Criterion 4: Intuitiveness — "Is it understood within 3 seconds?"
+
+- Does the eye flow naturally toward the core CTA?
+- Is the information hierarchy clear enough to allow scanning?
+- Can the user tell what action to take without guessing?
 
 ### DAI (Design Aesthetic Index)
 
 ```
-DAI = (응집도 × 0.3) + (독창성 × 0.25) + (완성도 × 0.25) + (직관성 × 0.2)
+DAI = (Cohesion × 0.3) + (Originality × 0.25) + (Craft × 0.25) + (Intuitiveness × 0.2)
 ```
 
-**점수 가이드:**
-- 9-10: 박물관에 걸릴 수준. 거의 불가능.
-- 7-8: 전문 디자이너 수준. 이것이 목표.
-- 5-6: 기능적이지만 디자인 평범.
-- 3-4: 명백한 미적 문제.
-- 1-2: AI 기본값 그대로.
+**Score Guide:**
+- 9-10: Museum-worthy. Nearly impossible.
+- 7-8: Professional designer level. This is the target.
+- 5-6: Functional but aesthetically unremarkable.
+- 3-4: Clear aesthetic problems.
+- 1-2: AI defaults as-is.
 
 ---
 
 ## Role Catalog
 
-오케스트레이터가 task에 맞는 역할을 **2~4명** 선택. **brand-analyst 필수**.
+The orchestrator selects **2-4 roles** suited to the task. **brand-analyst is mandatory**.
 
-| Role | 전문 영역 | 필수? |
+| Role | Expertise | Required? |
 |------|----------|------|
-| **brand-analyst** | 브랜딩, 무드, 톤앤매너, 컬러 팔레트 해석 | **필수** |
-| **ux-strategist** | 사용자 페르소나, UX 방향성, 정보 계층 | 선택 |
-| **visual-researcher** | 프로젝트 내 기존 패턴 분석, 시각적 트렌드 | 선택 |
-| **layout-architect** | 레이아웃 구조, 그리드 시스템, 공간 배분 | 선택 |
+| **brand-analyst** | Branding, mood, tone & manner, color palette interpretation | **Required** |
+| **ux-strategist** | User persona, UX direction, information hierarchy | Optional |
+| **visual-researcher** | Analysis of existing patterns in the project, visual trends | Optional |
+| **layout-architect** | Layout structure, grid systems, spatial distribution | Optional |
 
-카탈로그 외 역할도 정의 가능.
+Roles outside the catalog may also be defined.
 
 ---
 
-## Phase 0: Platform UI/UX Landscape — 최신 라이브러리/프레임워크 조사
+## Phase 0: Platform UI/UX Landscape — Research Latest Libraries/Frameworks
 
-디자인 구현 전에 해당 플랫폼의 **최신 UI/UX 라이브러리, 표준 프레임워크, 트렌드**를 조사한다. "지금 이 플랫폼에서 가장 진보된 UI를 만들려면 무엇을 써야 하는가?"
+Before implementing designs, research the **latest UI/UX libraries, standard frameworks, and trends** for the target platform. "What should I use to build the most advanced UI on this platform right now?"
 
 ### STEP 1: Platform-Specific Research
 
-감지된 플랫폼에 따라 WebSearch로 최신 정보를 조사:
+Based on the detected platform, research the latest information via WebSearch:
 
 #### Flutter
 ```
@@ -150,17 +150,17 @@ WebSearch: "Flutter design system package comparison"
 WebSearch: "Flutter Material 3 vs custom design system"
 ```
 
-조사 항목:
-| 영역 | 조사 내용 |
+Research items:
+| Area | Research Content |
 |------|----------|
-| 디자인 시스템 | Material 3 최신 변경, Cupertino 업데이트, 커스텀 테마 접근법 |
-| 애니메이션 | flutter_animate, rive, lottie, 네이티브 AnimationController 비교 |
-| 레이아웃 | Sliver 패턴, CustomScrollView, adaptive layout |
-| 컴포넌트 | shadcn_flutter, forui, 기타 모던 UI kit |
-| 인터랙션 | gesture 라이브러리, haptic feedback, spring physics |
-| 다크/라이트 테마 | ThemeExtension 패턴, 동적 컬러 |
-| 타이포그래피 | Google Fonts, variable fonts, text scaling |
-| 아이콘 | HugeIcons, Phosphor, 커스텀 SVG 접근법 |
+| Design system | Latest Material 3 changes, Cupertino updates, custom theme approaches |
+| Animation | flutter_animate, rive, lottie, native AnimationController comparison |
+| Layout | Sliver patterns, CustomScrollView, adaptive layout |
+| Components | shadcn_flutter, forui, other modern UI kits |
+| Interaction | Gesture libraries, haptic feedback, spring physics |
+| Dark/Light theme | ThemeExtension patterns, dynamic color |
+| Typography | Google Fonts, variable fonts, text scaling |
+| Icons | HugeIcons, Phosphor, custom SVG approaches |
 
 #### Swift (iOS)
 ```
@@ -170,19 +170,19 @@ WebSearch: "SwiftUI vs UIKit modern app design"
 WebSearch: "iOS design system architecture best practices"
 ```
 
-조사 항목:
-| 영역 | 조사 내용 |
+Research items:
+| Area | Research Content |
 |------|----------|
-| 프레임워크 | SwiftUI 최신 API, UIKit interop, TCA 패턴 |
-| 애니메이션 | SwiftUI animation, UIViewPropertyAnimator, Core Animation, Lottie |
-| 레이아웃 | LazyVStack/HStack, GeometryReader, Layout protocol |
-| 컴포넌트 | Apple HIG 최신 컴포넌트, SF Symbols 활용 |
-| 인터랙션 | haptics (UIFeedbackGenerator), gesture 조합, scroll 물리 |
-| 다크/라이트 | Asset Catalog, semantic colors, dynamic type |
-| 타이포그래피 | SF Pro, variable fonts, Dynamic Type |
-| 아이콘 | SF Symbols 최신 버전, 커스텀 심볼 |
+| Framework | Latest SwiftUI APIs, UIKit interop, TCA pattern |
+| Animation | SwiftUI animation, UIViewPropertyAnimator, Core Animation, Lottie |
+| Layout | LazyVStack/HStack, GeometryReader, Layout protocol |
+| Components | Latest Apple HIG components, SF Symbols usage |
+| Interaction | Haptics (UIFeedbackGenerator), gesture combinations, scroll physics |
+| Dark/Light | Asset Catalog, semantic colors, dynamic type |
+| Typography | SF Pro, variable fonts, Dynamic Type |
+| Icons | Latest SF Symbols version, custom symbols |
 
-#### React / Web (해당 시)
+#### React / Web (if applicable)
 ```
 WebSearch: "React UI library best 2025 2026"
 WebSearch: "CSS animation library modern 2025"
@@ -191,7 +191,7 @@ WebSearch: "React design system comparison radix shadcn"
 
 ### STEP 2: Landscape Report
 
-`.claude/pge-design/landscape.md`에 저장:
+Save to `.claude/pge-design/landscape.md`:
 
 ```
 ═══ PLATFORM UI/UX LANDSCAPE ═══
@@ -199,79 +199,79 @@ WebSearch: "React design system comparison radix shadcn"
 Platform: {Flutter | Swift | React}
 Date: {ISO timestamp}
 
-## 현재 프로젝트에서 사용 중
-| 영역 | 현재 사용 | 버전 |
+## Currently Used in Project
+| Area | Currently Using | Version |
 |------|----------|------|
-| 디자인 시스템 | {e.g., Material 3 커스텀} | ... |
-| 애니메이션 | {e.g., flutter_animate} | ... |
-| 아이콘 | {e.g., Material Icons} | ... |
+| Design system | {e.g., Material 3 custom} | ... |
+| Animation | {e.g., flutter_animate} | ... |
+| Icons | {e.g., Material Icons} | ... |
 | ... | ... | ... |
 
-## 플랫폼 최신 트렌드
-| 영역 | 최신 접근법 | 프로젝트 적용 가능? | Impact |
+## Latest Platform Trends
+| Area | Latest Approach | Applicable to Project? | Impact |
 |------|-----------|-------------------|--------|
 | ... | ... | Y/N | HIGH/MEDIUM/LOW |
 
-## 추천 라이브러리/접근법
-| # | 라이브러리/접근법 | 용도 | 현재 대비 장점 | 마이그레이션 난이도 |
+## Recommended Libraries/Approaches
+| # | Library/Approach | Purpose | Advantage Over Current | Migration Difficulty |
 |---|-----------------|------|--------------|-------------------|
 
-## 프로젝트 적용 권고
-- 즉시 적용 가능: [목록]
-- Phase 2에서 실험: [목록]
-- 별도 작업 필요: [목록 — /pge-front에서 성능 영향 점검 권고]
+## Project Application Recommendations
+- Immediately applicable: [list]
+- Experiment in Phase 2: [list]
+- Requires separate work: [list — recommend performance impact check via /pge-front]
 
 ═══════════════════════════════════════
 ```
 
-**필수 출력:** `Landscape report generated` — 이 보고서가 없으면 Phase 1 진행 불가.
+**Required output:** `Landscape report generated` — Phase 1 cannot proceed without this report.
 
-Phase 1 (Design Research)에서 이 Landscape Report를 참조하여 디자인 방향에 최신 라이브러리/접근법을 반영한다.
+Phase 1 (Design Research) references this Landscape Report to incorporate the latest libraries/approaches into the design direction.
 
 ---
 
-## Phase 1: Design Research — 방향성 탐색
+## Phase 1: Design Research — Direction Exploration
 
 ### STEP 1: Task Analysis + Role Selection
 
-**필수 출력:**
+**Required output:**
 ```
 Design Mode: Creative
 Platform: {Flutter | React | Vue}
 Selected roles: [{role1}, {role2}, ...]
-Rationale: [선택 이유]
+Rationale: [reason for selection]
 ```
 
 ### STEP 2: Create Research Team
 
 TeamCreate → Agent(team_name="pge-design-{slug}", name="{role}", run_in_background=true)
 
-각 에이전트는:
-- 현재 디자인 방향성 분석 (브랜딩, 무드, 톤)
-- design-system-map 참조 (현황 파악)
-- 타겟 사용자/페르소나에 맞는 디자인 방향 도출
-- 프로젝트 내 기존 시각적 패턴 분석
+Each agent:
+- Analyzes the current design direction (branding, mood, tone)
+- References the design-system-map (current state assessment)
+- Derives design direction suited to target users/persona
+- Analyzes existing visual patterns within the project
 
 ### STEP 3: Wait + Synthesize
 
 ### STEP 4: Design Research Brief
 
-`.claude/pge-design/research-brief.md`에 저장:
+Save to `.claude/pge-design/research-brief.md`:
 
 ```
 ═══ DESIGN RESEARCH BRIEF ═══
 
 ## Context
-Target: [디자인 대상]
+Target: [design target]
 Platform: {Flutter | React | Vue}
 Date: {ISO timestamp}
 
 ## Current Design Identity
-- Brand direction: [현재 브랜드 방향]
-- Mood/Tone: [현재 무드/톤]
-- Visual language: [현재 시각 언어]
+- Brand direction: [current brand direction]
+- Mood/Tone: [current mood/tone]
+- Visual language: [current visual language]
 
-## Baseline Scores (4 미적 기준)
+## Baseline Scores (4 Aesthetic Criteria)
 | Criterion | Score (1-10) | Key Observation |
 |-----------|-------------|-----------------|
 | Cohesion | X | ... |
@@ -281,10 +281,10 @@ Date: {ISO timestamp}
 
 **DAI = X**
 
-## Strengths (유지할 것)
+## Strengths (to preserve)
 - ...
 
-## Weaknesses (개선할 것)
+## Weaknesses (to improve)
 - ...
 
 ## Improvement Direction
@@ -292,53 +292,53 @@ Date: {ISO timestamp}
 ═══════════════════════════════════════
 ```
 
-**Phase Gate:** DAI + Improvement Direction 없으면 Phase 2 진행 불가.
+**Phase Gate:** Phase 2 cannot proceed without DAI + Improvement Direction.
 
 ### STEP 5: Shutdown Research Team
 
 ---
 
-## Phase 2: Design Generator — GAN 반복 루프 (최대 5회)
+## Phase 2: Design Generator — GAN Iterative Loop (max 5 rounds)
 
 ### STEP 1: Design Sprint Contract
 
-`.claude/pge-design/contract.md`에 작성:
+Write to `.claude/pge-design/contract.md`:
 - Scope (What Changes / What Does NOT Change)
-- Target Scores (4기준 각각 ≥ 7)
+- Target Scores (each of the 4 criteria >= 7)
 - Quality Aspirations:
-  - 응집도: "모든 요소가 하나의 이야기를 말하는 것처럼 느껴지는 분리 불가한 전체"
-  - 독창성: "한 눈에 AI가 만들었다고 알 수 있다면 실패"
-  - 완성도: "1px의 차이가 아마추어와 전문가를 나눈다"
-  - 직관성: "할머니가 3초 안에 무엇을 해야 하는지 알 수 있어야 한다"
+  - Cohesion: "An inseparable whole where every element feels like it tells a single story"
+  - Originality: "If it's immediately recognizable as AI-generated, it's a failure"
+  - Craft: "The difference of 1px separates amateur from professional"
+  - Intuitiveness: "Your grandmother should know what to do within 3 seconds"
 
 ### STEP 2: Iterative Design Loop
 
 #### A. Generate/Improve
-- **iteration 1**: Contract 기반 초기 구현
-- **iteration 2+**: 이전 mini-eval 피드백 기반, **가장 낮은 기준에 집중**
+- **iteration 1**: Initial implementation based on the Contract
+- **iteration 2+**: Based on previous mini-eval feedback, **focus on the lowest-scoring criterion**
 
 #### B. Mini-Evaluation
-각 반복 후 미적 관점에서 4기준 점수. **내부 목표 = 실제 목표 + 1** (자기 평가 편향 보정).
+After each iteration, score 4 criteria from an aesthetic perspective. **Internal target = actual target + 1** (self-evaluation bias correction).
 
 ```
 ═══ ITERATION {N} MINI-EVAL ═══
-Cohesion:      [score]/10 — [피드백]
-Originality:   [score]/10 — [피드백]
-Craft:         [score]/10 — [피드백]
-Intuitiveness: [score]/10 — [피드백]
+Cohesion:      [score]/10 — [feedback]
+Originality:   [score]/10 — [feedback]
+Craft:         [score]/10 — [feedback]
+Intuitiveness: [score]/10 — [feedback]
 
-Lowest: {가장 낮은 기준}
-Action: {CONTINUE | EXIT (모든 기준 ≥ 8 내부 목표)}
+Lowest: {lowest-scoring criterion}
+Action: {CONTINUE | EXIT (all criteria >= 8 internal target)}
 ```
 
 #### C. Loop Decision
 
-| 조건 | 행동 |
+| Condition | Action |
 |------|------|
-| 모든 기준 ≥ 8 (내부) | EXIT → Phase 3 |
-| 점수 정체 2회 연속 | PIVOT — 다른 기준부터 공략 |
-| 5회 도달 | FORCE EXIT → Phase 3 |
-| 어떤 기준 하락 | ROLLBACK → 이전 상태 복원 |
+| All criteria >= 8 (internal) | EXIT → Phase 3 |
+| Scores stagnant 2 consecutive rounds | PIVOT — attack a different criterion first |
+| 5 rounds reached | FORCE EXIT → Phase 3 |
+| Any criterion regressed | ROLLBACK → restore previous state |
 
 Score Tracking → `.claude/pge-design/iterations.md`
 
@@ -346,11 +346,11 @@ Score Tracking → `.claude/pge-design/iterations.md`
 
 ---
 
-## Phase 3: Design Critic — 독립 미적 평가
+## Phase 3: Design Critic — Independent Aesthetic Evaluation
 
-**fresh context Agent subagent 필수.**
+**Fresh context Agent subagent is mandatory.**
 
-### Critic 페르소나
+### Critic Persona
 
 ```
 You are a DESIGN CRITIC. Your reputation depends on catching aesthetic flaws.
@@ -361,42 +361,42 @@ You judge AESTHETICS and UX INTUITION, not technical compliance.
 Technical checks (token usage, accessibility, state handling) are /pge-front's job.
 
 Score Calibration:
-9-10: 박물관에 걸릴 수준. 거의 불가능.
-7-8:  전문 디자이너 수준. 이것이 목표.
-5-6:  기능적이지만 디자인 평범.
-3-4:  명백한 미적 문제.
-1-2:  AI 기본값 그대로.
+9-10: Museum-worthy. Nearly impossible.
+7-8:  Professional designer level. This is the target.
+5-6:  Functional but aesthetically unremarkable.
+3-4:  Clear aesthetic problems.
+1-2:  AI defaults as-is.
 
 ⚠️ Do NOT read "Self-Assessment Weaknesses" in result.md.
 ```
 
 ### Verification
 
-**A. 4기준 독립 평가** — 코드 분석으로 미적 판단
-**B. Before/After 비교** — Research Brief baseline 대비
+**A. Independent evaluation of 4 criteria** — aesthetic judgment via code analysis
+**B. Before/After comparison** — against the Research Brief baseline
 **C. Devil's Advocate (Creative):**
-1. 색상 팔레트가 감정적 의도를 전달하는가, 그냥 "예쁜" 조합인가?
-2. 타이포그래피 계층이 시선 흐름을 자연스럽게 유도하는가?
-3. 여백이 의도적인가, 그냥 비어있는가?
-4. 레이아웃이 콘텐츠 특성에 맞는가, 범용 그리드에 끼워넣은 건 아닌가?
-5. 스타일 변경이 기존 화면 일관성을 깨뜨리지 않았는가?
-6. "개선"이 시각적으로 비교 가능한 차이를 만들었는가?
+1. Does the color palette convey emotional intent, or is it just a "pretty" combination?
+2. Does the typographic hierarchy naturally guide the eye flow?
+3. Is the whitespace intentional, or simply empty?
+4. Does the layout suit the content's characteristics, or is it forced into a generic grid?
+5. Did the style changes break consistency with existing screens?
+6. Did the "improvement" produce a visually comparable difference?
 
 **D. Anti-Pattern (Creative):**
 
 | Anti-Pattern | How to Detect |
 |---|---|
-| "Improved" without visual difference | Before/After 시각적 변화 미미 |
-| Style regression | 연관 화면 시각적 일관성 파괴 |
-| Mood inconsistency | 한 화면 내 상충하는 무드 혼재 |
-| Typography hierarchy collapse | heading/body 구분 모호 |
-| Color palette bloat | 브랜드 컬러 외 무분별한 색상 |
-| Whitespace neglect | 여백 없이 빽빽, 시각적 숨결 부재 |
+| "Improved" without visual difference | Minimal visual change in Before/After comparison |
+| Style regression | Destroyed visual consistency with related screens |
+| Mood inconsistency | Conflicting moods coexisting within a single screen |
+| Typography hierarchy collapse | Ambiguous heading/body distinction |
+| Color palette bloat | Indiscriminate colors beyond brand palette |
+| Whitespace neglect | Packed without breathing room, no visual respiration |
 
 **Verdict:**
-- **PASS**: 모든 기준 ≥ 7, DAI ≥ 7.0
-- **CONDITIONAL PASS**: 모든 기준 ≥ 5, DAI ≥ 5.5
-- **FAIL**: hard-fail (응집도 < 5 or 완성도 < 5), 또는 DAI < 5.5
+- **PASS**: All criteria >= 7, DAI >= 7.0
+- **CONDITIONAL PASS**: All criteria >= 5, DAI >= 5.5
+- **FAIL**: Hard-fail (Cohesion < 5 or Craft < 5), or DAI < 5.5
 
 → `.claude/pge-design/eval.md`
 
@@ -409,17 +409,17 @@ Archive: `.claude/pge-design/history/{YYYYMMDD}T{HHMM}_{slug}.md`
 ```
 DESIGN CREATIVE REPORT
 ════════════════════════════════════════
-Target:          [디자인 대상]
+Target:          [design target]
 Platform:        {Flutter | React | Vue}
 Date:            {ISO timestamp}
 Verdict:         {PASS | CONDITIONAL PASS | FAIL}
 
 ── Research ──
 Team:            [{roles}]
-Direction:       [개선 방향 한 줄]
+Direction:       [improvement direction in one line]
 
 ── Generation ──
-Iterations:      {N}회
+Iterations:      {N} rounds
 Exit reason:     {reason}
 
 ── Critic ──
@@ -433,23 +433,23 @@ Exit reason:     {reason}
 DAI:             Before X → After X (Δ: +X)
 Evaluator:       independent design critic (fresh context)
 
-💡 기술적 점검은 /pge-front를 실행하세요.
+💡 For technical checks, run /pge-front.
 ════════════════════════════════════════
 ```
 
 ## Escalation Rules
 
-- DAI < 3.0: 디자인 기초 재구축 권고
-- 점수 정체 3회 연속 → STOP + 방향 확인
-- FAIL loop 2+회 → 중단
-- 기술적 이슈 발견 시 → `/pge-front` 전환 권고
+- DAI < 3.0: Recommend rebuilding design foundations
+- Scores stagnant 3 consecutive rounds → STOP + confirm direction
+- FAIL loop 2+ times → halt
+- If technical issues found → recommend switching to `/pge-front`
 
 ## Important Rules
 
-- 필수 출력 없으면 다음 Phase 불가
-- Phase 1 읽기 전용, Phase 2 team lead만 수정
-- Phase 3 fresh context 필수
-- **미적 판단** 집중 — 기술적 점검은 `/pge-front` 영역
-- Evaluator에게 Generator 자기평가 보여주지 않기
-- Mini-eval 내부 목표 = 실제 목표 + 1
-- design-system-map **읽기 전용** (갱신은 /pge-front)
+- Cannot proceed to the next Phase without required outputs
+- Phase 1 is read-only; only the Phase 2 team lead may modify
+- Phase 3 requires fresh context
+- Focus on **aesthetic judgment** — technical checks belong to `/pge-front`
+- Do not show Generator self-assessment to the Evaluator
+- Mini-eval internal target = actual target + 1
+- design-system-map is **read-only** (updates belong to /pge-front)

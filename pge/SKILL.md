@@ -21,59 +21,59 @@ allowed-tools:
 
 # /pge — PGE Full Protocol (Planner-Generator-Evaluator)
 
-사용자가 작업 요청에 `/pge`를 붙이면 전체 PGE 프로토콜을 강제 실행한다.
+When the user appends `/pge` to a task request, the full PGE protocol is enforced.
 
-## Project Initialization (첫 실행 시)
+## Project Initialization (First Run)
 
-프로젝트에 PGE 파일이 없으면 자동 생성:
+If PGE files do not exist in the project, create them automatically:
 
 ```bash
-# PGE 상태 디렉토리
+# PGE state directory
 mkdir -p .claude/pge/history
 
-# .gitignore에 추가
+# Add to .gitignore
 if [ -f .gitignore ] && ! grep -q ".claude/pge/" .gitignore 2>/dev/null; then
   echo -e "\n# PGE workflow state files (ephemeral per-task)\n.claude/pge/" >> .gitignore
 fi
 ```
 
-`docs/backend-dependency-map.md`가 없으면 사용자에게 알림:
-> "dependency map이 없습니다. 프로젝트를 분석하여 `docs/backend-dependency-map.md`를 생성할까요?"
-> 사용자가 승인하면 프로젝트의 DB 스키마, 함수, 정책, 뷰를 분석하여 자동 생성.
+If `docs/backend-dependency-map.md` does not exist, notify the user:
+> "No dependency map found. Would you like me to analyze the project and generate `docs/backend-dependency-map.md`?"
+> If the user approves, analyze the project's DB schema, functions, policies, and views to auto-generate it.
 
 ## Input
 
-$ARGUMENTS — 작업 설명
+$ARGUMENTS — Task description
 
 ## Task Type Detection
 
-작업 설명을 분석하여 유형을 판별:
+Analyze the task description to determine its type:
 
-- **Investigation** — 증상/버그/에러 키워드 ("안됨", "느림", "왜", "broken", "error", "bug", "fix")
-- **Direct task** — 추가/변경/삭제 키워드 ("추가", "변경", "삭제", "add", "update", "remove", "implement")
-- **Code review** — 리뷰 키워드 ("리뷰", "review", "check", "점검")
+- **Investigation** — Symptom/bug/error keywords ("broken", "slow", "why", "error", "bug", "fix")
+- **Direct task** — Add/change/delete keywords ("add", "update", "remove", "implement", "change", "delete")
+- **Code review** — Review keywords ("review", "check", "inspect")
 
-판별 결과를 출력: `PGE Mode: {Investigation | Direct | Review}`
+Output the detection result: `PGE Mode: {Investigation | Direct | Review}`
 
 ---
 
 ## Investigation Mode
 
-### STEP 1: Systematic Debugging Protocol (4-phase, 모든 단계 필수)
+### STEP 1: Systematic Debugging Protocol (4-phase, all steps mandatory)
 
 #### Phase 1: Root Cause Investigation
-1. 사용자가 제공한 증상/로그를 정리
-2. 관련 코드 경로를 Read로 추적
-3. `git log --oneline -20 -- <affected-files>` 실행
-4. 재현 가능 여부 판단
+1. Organize the symptoms/logs provided by the user
+2. Trace related code paths using Read
+3. Run `git log --oneline -20 -- <affected-files>`
+4. Determine whether the issue is reproducible
 
-**필수 출력:**
+**Required output:**
 ```
-Root cause hypothesis: [구체적이고 검증 가능한 주장]
-Affected files: [파일 목록]
+Root cause hypothesis: [Specific, verifiable claim]
+Affected files: [File list]
 ```
 
-이 출력이 없으면 다음 단계로 진행 불가.
+Cannot proceed to the next step without this output.
 
 #### Phase 2: Pattern Analysis
 
@@ -86,37 +86,37 @@ Affected files: [파일 목록]
 | Configuration drift | Works locally, fails remote | Y/N |
 | Stale cache | Shows old data | Y/N |
 
-**필수 출력:** `Pattern match: {매칭된 패턴 또는 "신규 패턴"}`
+**Required output:** `Pattern match: {Matched pattern or "New pattern"}`
 
 #### Phase 3: Hypothesis Testing
-1. 가설을 검증할 수 있는 방법 제시 (로그, assertion, SQL 등)
-2. 가능하면 실행하여 검증
-3. 3-strike rule: 3회 실패 시 STOP + 에스컬레이션
+1. Propose a method to verify the hypothesis (logs, assertions, SQL, etc.)
+2. Execute verification if possible
+3. 3-strike rule: STOP + escalate after 3 failures
 
-**필수 출력:** `Hypothesis verified: {Y/N} — {근거}`
+**Required output:** `Hypothesis verified: {Y/N} — {Evidence}`
 
-#### Phase 4: Scope Lock + Backend/Frontend 판정
-**필수 출력:**
+#### Phase 4: Scope Lock + Backend/Frontend Determination
+**Required output:**
 ```
-Scope: [영향 받는 모듈 경계]
+Scope: [Affected module boundaries]
 Backend change needed: {Y/N}
 ```
 
-### STEP 2: 분기
+### STEP 2: Branch
 
 - **Backend change needed: Y** → Phase 1: Planner → Phase 2: Generator → Phase 3: Evaluator
-- **Backend change needed: N** → Fix → Test → Analyze → Debug Report 출력
+- **Backend change needed: N** → Fix → Test → Analyze → Output Debug Report
 
 ### STEP 3: Debug Report
 ```
 DEBUG REPORT
 ════════════════════════════════════════
-Symptom:         [사용자가 보고한 증상]
-Root cause:      [실제 원인]
-Pattern:         [매칭된 패턴]
-Fix:             [변경 내용, file:line 참조]
-Evidence:        [테스트 결과, 재현 확인]
-Regression test: [새로 추가된 테스트 file:line]
+Symptom:         [Symptom reported by user]
+Root cause:      [Actual cause]
+Pattern:         [Matched pattern]
+Fix:             [Changes made, file:line references]
+Evidence:        [Test results, reproduction confirmation]
+Regression test: [Newly added test file:line]
 Status:          DONE | DONE_WITH_CONCERNS | BLOCKED
 ════════════════════════════════════════
 ```
@@ -125,7 +125,7 @@ Status:          DONE | DONE_WITH_CONCERNS | BLOCKED
 
 ## Direct Task Mode
 
-### Phase 1: Planner — Sprint Contract 생성
+### Phase 1: Planner — Generate Sprint Contract
 
 #### Step 1: Identify Affected Resources
 
@@ -216,39 +216,39 @@ If **8+ files** in "What Changes": challenge whether it can be split.
 - Views typically require DROP + CREATE when columns change.
 - Note new dependencies for post-task map update.
 
-Contract 출력 후 **즉시 Phase 2 진행**.
+Proceed **immediately to Phase 2** after outputting the contract.
 
 ---
 
-### Phase 2: Generator — 실행
+### Phase 2: Generator — Execution
 
-Sprint Contract의 Change Order를 따라 실행.
+Follow the Change Order from the Sprint Contract.
 
-**Server Boundary Checkpoint** (deploy 후):
-- Acceptance criteria에서 1-2개 핵심 쿼리 실행
-- 실패 시 STOP → 서버 수정 → 재배포
-- 클라이언트 코드는 서버 검증 후에만 진행
+**Server Boundary Checkpoint** (after deploy):
+- Run 1-2 key queries from the acceptance criteria
+- If they fail, STOP → fix server-side → redeploy
+- Proceed to client code only after server verification passes
 
-**Rollback Protocol** (배포 실패 시):
+**Rollback Protocol** (on deploy failure):
 - **Migration failure**: repair command, fix, re-apply
 - **Partial migration**: Do NOT rollback successful ones. Fix failing and re-apply.
 - **Server function deploy failure**: Previous version active. Fix and re-deploy.
 - **Both server + client modified**: Server rollback first, then revert client.
 
-완료 후 **Result Manifest** → `.claude/pge/result.md`:
-- 변경 파일 목록 + 설명
-- 배포 결과
-- 테스트 결과
-- 취약 부분 자체 평가
-- **Noticed Issues** (scope 밖): 비관련 이슈 기록
+After completion, write the **Result Manifest** to `.claude/pge/result.md`:
+- List of changed files with descriptions
+- Deployment results
+- Test results
+- Self-assessment of fragile areas
+- **Noticed Issues** (out of scope): record unrelated issues observed
 
 ---
 
-### Phase 3: Evaluator — 독립 검증
+### Phase 3: Evaluator — Independent Verification
 
-**Agent subagent을 fresh context로 스폰**.
+**Spawn an Agent subagent with fresh context**.
 
-Evaluator Agent 프롬프트:
+Evaluator Agent prompt:
 
 ```
 You are the EVALUATOR in a Planner-Generator-Evaluator workflow.
@@ -324,22 +324,22 @@ Each item must be verified with actual query or code read — not assumed.
 Write to .claude/pge/eval.md. Return verdict + key findings.
 ```
 
-#### Evaluator 결과 처리
+#### Handling Evaluator Results
 
-- **PASS**: Archive → 완료
-- **CONDITIONAL PASS**: 수정 → Archive → 완료 (재검증 불필요)
-- **FAIL**: 수정 → Evaluator 재실행 (fresh context)
+- **PASS**: Archive → done
+- **CONDITIONAL PASS**: Fix items → Archive → done (no re-evaluation needed)
+- **FAIL**: Fix items → Re-run Evaluator (fresh context)
 
 #### Archive
 
-`.claude/pge/history/{YYYYMMDD}T{HHMM}_{task-slug}.md` 생성 (under 100 lines).
+Create `.claude/pge/history/{YYYYMMDD}T{HHMM}_{task-slug}.md` (under 100 lines).
 
 #### Evaluator Rules
 
-- **반드시 fresh context Agent subagent**으로 실행
-- **실제 쿼리 실행** 필수
-- "I assume it works" 불가
-- FAIL → fix → re-evaluate 시 fresh context 재생성
+- **Must be run as a fresh context Agent subagent**
+- **Running actual queries is mandatory**
+- "I assume it works" is not acceptable
+- On FAIL → fix → re-evaluate, create a fresh context again
 
 ---
 
@@ -364,15 +364,15 @@ Write to .claude/pge/eval.md. Return verdict + key findings.
 - ASK: security, race conditions, design decisions, >20 lines
 
 ### STEP 2: Evaluator (Phase 3 only)
-Domain-specific checklists로 검증
+Verify using domain-specific checklists
 
-### STEP 3: 이슈 발견 시
-자동 Direct Task Mode 전환 → Planner → Generator → Evaluator
+### STEP 3: When Issues Are Found
+Automatically transition to Direct Task Mode → Planner → Generator → Evaluator
 
 ---
 
 ## Important Rules
 
-- 각 Phase의 **필수 출력**이 없으면 다음 Phase 진행 불가
-- `/pge` 작업은 **프로토콜 스킵 불가**
-- Escalation: 3-strike, PGE FAIL loop 2+회 시 중단
+- Cannot proceed to the next Phase without each Phase's **required output**
+- `/pge` tasks **cannot skip the protocol**
+- Escalation: Stop after 3-strike or 2+ PGE FAIL loops

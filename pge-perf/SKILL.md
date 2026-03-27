@@ -23,11 +23,11 @@ allowed-tools:
 
 # /pge-perf — PGE Performance Optimization Protocol
 
-사용자가 작업 요청에 `/pge-perf`를 붙이면 전체 성능 최적화 프로토콜을 강제 실행한다.
+When the user appends `/pge-perf` to a task request, the full performance optimization protocol is enforced.
 
-## Project Initialization (첫 실행 시)
+## Project Initialization (On First Run)
 
-프로젝트에 PGE-perf 파일이 없으면 자동 생성:
+If PGE-perf files do not exist in the project, create them automatically:
 
 ```bash
 mkdir -p .claude/pge-perf/baselines
@@ -40,216 +40,216 @@ fi
 
 ## CRITICAL: Agent Spawning Rules
 
-**반드시 아래 규칙을 따를 것:**
+**The following rules must be strictly followed:**
 
-1. **TeamCreate를 사용하여 팀을 구성**할 것. 단순 Agent subagent 스폰이 아닌 TeamCreate → Agent(team_name=..., name=...) 패턴을 사용.
-2. **Explore 서브에이전트는 사용하지 말 것.** 모든 teammate는 `general-purpose` agent로 스폰.
-3. **각 teammate는 서로 SendMessage로 발견한 내용을 공유**하면서 진행할 것. 사일로 작업 금지.
-4. **TaskCreate로 작업 목록을 생성**하고 teammate에게 할당할 것.
-5. **Phase 1(Profiler)의 에이전트는 읽기 전용** — 최적화 구현은 Phase 2에서 team lead (메인 에이전트)만 수행.
+1. **Use TeamCreate to form the team.** Use the TeamCreate → Agent(team_name=..., name=...) pattern, not simple Agent subagent spawning.
+2. **Do not use Explore subagents.** All teammates must be spawned as `general-purpose` agents.
+3. **Each teammate must share findings with others via SendMessage** as they proceed. Siloed work is prohibited.
+4. **Use TaskCreate to create a task list** and assign tasks to teammates.
+5. **Phase 1 (Profiler) agents are read-only** — optimization implementation is performed only by the team lead (main agent) in Phase 2.
 
 ## Input
 
-$ARGUMENTS — 성능 최적화 대상 설명 (특정 화면, API, 쿼리 등)
+$ARGUMENTS — Description of the performance optimization target (specific screen, API, query, etc.)
 
 ---
 
-## Phase 1: Profiler — Baseline 측정 + Bottleneck 식별
+## Phase 1: Profiler — Baseline Measurement + Bottleneck Identification
 
 ### STEP 1: Create Profiling Team
 
-**TeamCreate**로 팀을 생성하고, **Agent** tool로 3명의 전문가를 스폰한다. 반드시 `team_name` 파라미터를 지정할 것.
+Create a team with **TeamCreate** and spawn 3 specialists using the **Agent** tool. The `team_name` parameter must always be specified.
 
 ```
 Team: pge-perf-profile
 Agents:
-  1. query-profiler  — DB 레이어 프로파일링 (Layer 1)
-  2. code-analyzer   — Server + Client 코드 분석 (Layer 2 + 3)
-  3. load-tester     — Network 패턴 분석 (Layer 4)
+  1. query-profiler  — DB layer profiling (Layer 1)
+  2. code-analyzer   — Server + Client code analysis (Layer 2 + 3)
+  3. load-tester     — Network pattern analysis (Layer 4)
 ```
 
 #### Agent 1: query-profiler
 
-Agent tool 호출 시 반드시 `team_name="pge-perf-profile"`, `name="query-profiler"`, `run_in_background=true` 지정.
+When calling the Agent tool, always specify `team_name="pge-perf-profile"`, `name="query-profiler"`, `run_in_background=true`.
 
-스폰 지시:
+Spawn instructions:
 ```
-당신은 팀 "pge-perf-profile"의 query-profiler입니다. DB 레이어의 성능 병목을 프로파일링하는 전문가입니다.
+You are the query-profiler on team "pge-perf-profile". You are a specialist in profiling performance bottlenecks at the DB layer.
 
-## 임무
-대상: {사용자가 제공한 최적화 대상}
+## Mission
+Target: {optimization target provided by the user}
 
-다음 7개 체크 항목을 순서대로 수행하세요:
+Perform the following 7 check items in order:
 
-### D1: Slow Query 식별
-- 대상 기능과 관련된 주요 쿼리를 코드에서 Read/Grep으로 찾기
-- 각 쿼리를 `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)`로 감싸 실행
-- cost, actual time, rows 비교. Seq Scan on large table이면 경고
+### D1: Identify Slow Queries
+- Use Read/Grep to find the main queries related to the target feature in the code
+- Wrap each query in `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` and execute
+- Compare cost, actual time, and rows. Flag if Seq Scan on large table
 
 ### D2: Top-N Slow Queries
 SELECT query, calls, mean_exec_time, total_exec_time, rows
 FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 20;
 
-### D3: 누락 인덱스
+### D3: Missing Indexes
 SELECT schemaname, relname, seq_scan, seq_tup_read, idx_scan, n_live_tup
 FROM pg_stat_user_tables
 WHERE seq_scan > 100 AND n_live_tup > 1000 ORDER BY seq_tup_read DESC;
 
-### D4: N+1 쿼리 패턴
-- 코드에서 Grep으로 루프 내 `.from(`, `.select(`, `.rpc(` 패턴 탐지
-- 발견 시 code-analyzer에게 SendMessage로 해당 위치 공유
+### D4: N+1 Query Patterns
+- Use Grep to detect patterns like `.from(`, `.select(`, `.rpc(` inside loops
+- If found, share the locations with code-analyzer via SendMessage
 
-### D5: 불필요한 JOIN
-- EXPLAIN ANALYZE 결과에서 Nested Loop/Hash Join rows가 실제 사용 대비 과도하면 경고
+### D5: Unnecessary JOINs
+- Flag if Nested Loop/Hash Join rows in EXPLAIN ANALYZE results are excessive relative to actual usage
 
-### D6: Index Usage 분석
+### D6: Index Usage Analysis
 SELECT t.relname, indexrelname, idx_scan, idx_tup_read, idx_tup_fetch
 FROM pg_stat_user_indexes ui JOIN pg_stat_user_tables t ON ui.relid = t.relid
 ORDER BY idx_scan ASC;
 
-### D7: 트랜잭션 잠금 경합
+### D7: Transaction Lock Contention
 SELECT pid, wait_event_type, wait_event, state, query
 FROM pg_stat_activity WHERE wait_event_type = 'Lock';
 
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-code-analyzer와 load-tester에게 각각 SendMessage를 보내세요:
-- DB Profiling Results 전체
-- 발견된 slow query 목록과 원인
-- 누락 인덱스 + 추천 인덱스
-- N+1 패턴 발견 위치
+## Required: Share results via SendMessage after analysis is complete
+Send a SendMessage to both code-analyzer and load-tester with:
+- Full DB Profiling Results
+- List of discovered slow queries and their causes
+- Missing indexes + recommended indexes
+- N+1 pattern locations found
 
-출력 형식:
+Output format:
 ## DB Profiling Results
 ### Slow Queries (Top 5)
 | Rank | Query (truncated) | Mean Time | Calls | Issue |
 ### Missing Indexes
 | Table | seq_scan | idx_scan | Recommendation |
 ### Lock Contention
-(없으면 "No lock contention detected")
+(If none: "No lock contention detected")
 
-다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
-코드를 수정하지 마세요. 분석만 하세요.
-TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
+If you receive messages from other teammates, incorporate their findings to enhance your analysis.
+Do not modify code. Analysis only.
+Use TaskUpdate to mark your assigned Task from in_progress → completed.
 ```
 
 #### Agent 2: code-analyzer
 
-Agent tool 호출 시 반드시 `team_name="pge-perf-profile"`, `name="code-analyzer"`, `run_in_background=true` 지정.
+When calling the Agent tool, always specify `team_name="pge-perf-profile"`, `name="code-analyzer"`, `run_in_background=true`.
 
-스폰 지시:
+Spawn instructions:
 ```
-당신은 팀 "pge-perf-profile"의 code-analyzer입니다. Server 및 Client 코드의 성능 병목을 분석하는 전문가입니다.
+You are the code-analyzer on team "pge-perf-profile". You are a specialist in analyzing performance bottlenecks in Server and Client code.
 
-## 임무
-대상: {사용자가 제공한 최적화 대상}
+## Mission
+Target: {optimization target provided by the user}
 
-### Layer 2: Server 분석
+### Layer 2: Server Analysis
 
-#### S1: 콜드스타트 시간
-- Edge Function / API route의 top-level import 분석
-- 무거운 라이브러리 여부 체크
+#### S1: Cold Start Time
+- Analyze top-level imports of Edge Functions / API routes
+- Check for heavy library imports
 
-#### S2: 응답 페이로드 크기
-- 응답 데이터 구조 분석, 불필요한 필드 포함 여부
+#### S2: Response Payload Size
+- Analyze response data structures, check for unnecessary field inclusion
 
-#### S3: 외부 API 호출 대기
-- Grep으로 fetch(, axios, got( 탐지
-- await 체인 직렬 여부 확인
+#### S3: External API Call Waits
+- Use Grep to detect fetch(, axios, got(
+- Check for sequential await chains
 
-#### S4: 직렬→병렬 전환 가능
-- 연속된 await → Promise.all 전환 가능 여부
+#### S4: Sequential-to-Parallel Conversion Opportunities
+- Check if consecutive awaits can be converted to Promise.all
 
-#### S5: 불필요한 재시도
-- 지수 백오프 없는 재시도 루프 경고
+#### S5: Unnecessary Retries
+- Flag retry loops without exponential backoff
 
-#### S6: 미들웨어 오버헤드
-- RLS 정책 수, auth 미들웨어 체인 길이 분석
+#### S6: Middleware Overhead
+- Analyze RLS policy count and auth middleware chain length
 
-### Layer 3: Client 분석
+### Layer 3: Client Analysis
 
-#### C1: 불필요한 리빌드/리렌더
-- Flutter: setState 빈도, Consumer/Watch 범위, build() 내 비용 큰 연산
-- React: useEffect deps 누락, 불필요한 state 변경
+#### C1: Unnecessary Rebuilds/Rerenders
+- Flutter: setState frequency, Consumer/Watch scope, expensive computations inside build()
+- React: Missing useEffect deps, unnecessary state changes
 
-#### C2: 과도한 Provider Invalidation
-- ref.invalidate, ref.refresh 연쇄 갱신 패턴
+#### C2: Excessive Provider Invalidation
+- ref.invalidate, ref.refresh cascading update patterns
 
-#### C3: 메모리 누수
-- StreamSubscription/Timer/AnimationController의 dispose() 해제 여부
+#### C3: Memory Leaks
+- Check whether StreamSubscription/Timer/AnimationController are properly released in dispose()
 
-#### C4: 이미지/에셋 최적화
-- Glob으로 이미지 파일 탐색 → 크기 확인
+#### C4: Image/Asset Optimization
+- Use Glob to search for image files → check sizes
 
-#### C5: 초기 로딩 동시 호출 수
-- 앱 시작점에서 초기화 시 API 호출 수 카운트. 5개 이상이면 경고
+#### C5: Concurrent Calls During Initial Load
+- Count API calls at app entry point during initialization. Flag if 5 or more
 
-## Grep 패턴 참고
+## Grep Pattern Reference
 N+1:          for.*\n.*\.from\(  |  \.forEach.*\n.*\.from\(
 SELECT *:     \.select\(\s*\)  |  \.select\('\*'\)
-직렬 await:   const \w+ = await.*\n\s*const \w+ = await
-리빌드:       setState\(\s*\(\)\s*\{
-메모리누수:   StreamSubscription|\.listen\(  → dispose()+cancel() 확인
+Sequential await:   const \w+ = await.*\n\s*const \w+ = await
+Rebuilds:       setState\(\s*\(\)\s*\{
+Memory leaks:   StreamSubscription|\.listen\(  → check for dispose()+cancel()
 Invalidation: ref\.invalidate\(|ref\.refresh\(
 
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-query-profiler와 load-tester에게 각각 SendMessage를 보내세요:
-- Server Issues 목록 (file:line + impact)
-- Client Issues 목록 (file:line + impact)
-- N+1 패턴 교차 확인 결과
+## Required: Share results via SendMessage after analysis is complete
+Send a SendMessage to both query-profiler and load-tester with:
+- Server Issues list (file:line + impact)
+- Client Issues list (file:line + impact)
+- N+1 pattern cross-verification results
 
-출력 형식:
+Output format:
 ## Code Analysis Results
 ### Server Issues
 | # | File:Line | Issue | Category | Impact | Suggested Fix |
 ### Client Issues
 | # | File:Line | Issue | Category | Impact | Suggested Fix |
 
-다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
-코드를 수정하지 마세요. 분석만 하세요.
-TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
+If you receive messages from other teammates, incorporate their findings to enhance your analysis.
+Do not modify code. Analysis only.
+Use TaskUpdate to mark your assigned Task from in_progress → completed.
 ```
 
 #### Agent 3: load-tester
 
-Agent tool 호출 시 반드시 `team_name="pge-perf-profile"`, `name="load-tester"`, `run_in_background=true` 지정.
+When calling the Agent tool, always specify `team_name="pge-perf-profile"`, `name="load-tester"`, `run_in_background=true`.
 
-스폰 지시:
+Spawn instructions:
 ```
-당신은 팀 "pge-perf-profile"의 load-tester입니다. Network 레이어의 성능 패턴을 분석하는 전문가입니다.
+You are the load-tester on team "pge-perf-profile". You are a specialist in analyzing performance patterns at the Network layer.
 
-## 임무
-대상: {사용자가 제공한 최적화 대상}
+## Mission
+Target: {optimization target provided by the user}
 
-### N1: 중복 API 호출
-- Grep으로 동일 .from('table') 호출이 여러 파일에 분산되어 있으면 경고
-- 같은 화면에서 여러 컴포넌트가 각각 fetch하는지 확인
+### N1: Duplicate API Calls
+- Use Grep to flag if identical .from('table') calls are scattered across multiple files
+- Check if multiple components on the same screen each fetch separately
 
-### N2: 배치 가능한 단건 호출
-- 루프 내 개별 .insert(), .update(), .upsert() → 배치 전환 가능 여부
+### N2: Single Calls That Could Be Batched
+- Check if individual .insert(), .update(), .upsert() calls inside loops can be converted to batch operations
 
-### N3: 캐싱 누락
-- fetch 호출 시 cache, revalidate 설정 여부
-- 로컬 캐시 레이어 존재 여부
+### N3: Missing Caching
+- Check for cache/revalidate settings on fetch calls
+- Check for local cache layer existence
 
-### N4: Realtime Subscription 오버헤드
-- .channel(, .on('postgres_changes' 탐지
-- 필터 없는 전체 테이블 구독, 채널 미해제
+### N4: Realtime Subscription Overhead
+- Detect .channel(, .on('postgres_changes'
+- Flag full table subscriptions without filters, unreleased channels
 
-### N5: 페이지네이션 누락
-- .select() 호출에 .range() 또는 .limit() 없는 패턴 탐지
+### N5: Missing Pagination
+- Detect .select() calls without .range() or .limit()
 
-### N6: 압축/직렬화
-- 응답 헤더에 gzip 설정 여부
-- JSON 직렬화 시 불필요한 필드 포함 여부
+### N6: Compression/Serialization
+- Check for gzip settings in response headers
+- Check for unnecessary field inclusion during JSON serialization
 
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-query-profiler와 code-analyzer에게 각각 SendMessage를 보내세요:
-- Network Issues 전체 목록
-- 중복 호출 맵 (endpoint → call sites)
-- 배치 가능 목록
-- 페이지네이션 누락 위치
+## Required: Share results via SendMessage after analysis is complete
+Send a SendMessage to both query-profiler and code-analyzer with:
+- Full Network Issues list
+- Duplicate call map (endpoint → call sites)
+- Batchable items list
+- Missing pagination locations
 
-출력 형식:
+Output format:
 ## Network Analysis Results
 ### Duplicate Calls
 | Endpoint/Table | Call Sites | Est. Redundancy |
@@ -262,35 +262,35 @@ query-profiler와 code-analyzer에게 각각 SendMessage를 보내세요:
 ### Subscription Issues
 | Channel | Filter | Issue |
 
-다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
-코드를 수정하지 마세요. 분석만 하세요.
-TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
+If you receive messages from other teammates, incorporate their findings to enhance your analysis.
+Do not modify code. Analysis only.
+Use TaskUpdate to mark your assigned Task from in_progress → completed.
 ```
 
 ### STEP 2: Wait for Team Results + Synthesize
 
-3명의 에이전트가 SendMessage로 서로 발견사항을 공유하며 분석을 진행한다.
-모든 에이전트의 분석이 완료되면 결과를 종합한다.
+The 3 agents share their findings with each other via SendMessage while conducting analysis.
+Once all agents complete their analysis, synthesize the results.
 
 ### STEP 3: Performance Profile Report
 
-3명의 분석 결과를 종합하여 `.claude/pge-perf/perf-target.md`에 저장:
+Consolidate the analysis results from all 3 agents and save to `.claude/pge-perf/perf-target.md`:
 
 ```
 ═══ PERFORMANCE PROFILE REPORT ═══
 
 ## Profiling Summary
-Target: [최적화 대상]
+Target: [optimization target]
 Date: {ISO timestamp}
 
-## query-profiler 발견 (Layer 1: Database):
-  [slow query 목록 + 누락 인덱스 + N+1]
+## query-profiler Findings (Layer 1: Database):
+  [slow query list + missing indexes + N+1]
 
-## code-analyzer 발견 (Layer 2: Server + Layer 3: Client):
-  [서버 병목 + 클라이언트 병목]
+## code-analyzer Findings (Layer 2: Server + Layer 3: Client):
+  [server bottlenecks + client bottlenecks]
 
-## load-tester 발견 (Layer 4: Network):
-  [중복 호출 + 캐싱 누락 + 페이지네이션]
+## load-tester Findings (Layer 4: Network):
+  [duplicate calls + missing caching + pagination]
 
 ## Baseline Metrics
 | Category | Metric | Current Value | Measured By |
@@ -298,9 +298,9 @@ Date: {ISO timestamp}
 ## Bottleneck Summary
 | # | Layer | Issue | File:Line | Severity | Baseline |
 
-Bottleneck identified: [가장 심각한 병목]
+Bottleneck identified: [most severe bottleneck]
 Layer: {DB | Server | Client | Network}
-Baseline metric: [현재 수치]
+Baseline metric: [current measurement]
 ═══════════════════════════════════
 ```
 
@@ -308,57 +308,57 @@ Baseline metric: [현재 수치]
 
 | Pattern | Signature | Match? |
 |---------|-----------|--------|
-| N+1 query | 루프 내 DB 호출, 다수 쿼리 | Y/N |
+| N+1 query | DB calls inside loops, excessive queries | Y/N |
 | Missing index | Full table scan, slow WHERE | Y/N |
-| SELECT * | 과도한 페이로드, 불필요 컬럼 | Y/N |
-| Sequential await | 직렬 독립 호출, 증가된 레이턴시 | Y/N |
-| Excessive rebuild | 빈번한 setState/rerender | Y/N |
-| Missing pagination | 전체 데이터 로드, OOM 위험 | Y/N |
-| Bundle bloat | 큰 import, 콜드스타트 지연 | Y/N |
+| SELECT * | Excessive payload, unnecessary columns | Y/N |
+| Sequential await | Serial independent calls, increased latency | Y/N |
+| Excessive rebuild | Frequent setState/rerender | Y/N |
+| Missing pagination | Loading all data, OOM risk | Y/N |
+| Bundle bloat | Large imports, cold start delay | Y/N |
 
-**필수 출력** — `Bottleneck identified`, `Layer`, `Baseline metric`, `Anti-pattern match`가 없으면 Phase 2 진행 불가.
+**Required output** — If `Bottleneck identified`, `Layer`, `Baseline metric`, or `Anti-pattern match` is missing, Phase 2 cannot proceed.
 
 ### STEP 4: Shutdown Profiling Team
 
-분석 완료 후 모든 에이전트에게 shutdown_request를 보내고 팀 정리.
+After analysis is complete, send shutdown_request to all agents and clean up the team.
 
 ---
 
-## Phase 2: Optimizer — Impact 순서로 최적화 구현
+## Phase 2: Optimizer — Implement Optimizations in Impact Order
 
 ### STEP 1: Build Optimization Priority Matrix
 
-**점수 기준 (각 1-5):**
+**Scoring criteria (1-5 each):**
 
 | Factor | 5 (Best) | 1 (Worst) |
 |--------|----------|-----------|
-| Impact | 응답 시간 50%+ 감소 | 5% 미만 |
-| Effort | 한 줄 변경 | 대규모 리팩토링 |
-| Risk | 부작용 없음 | 데이터 손실 가능 |
+| Impact | 50%+ response time reduction | Less than 5% |
+| Effort | Single line change | Major refactoring |
+| Risk | No side effects | Potential data loss |
 
-**우선순위 공식:** `Priority Score = Impact × 2 - Effort - Risk`
+**Priority formula:** `Priority Score = Impact × 2 - Effort - Risk`
 
-- Score >= 6: **즉시 수행** (Quick Win)
-- Score 3-5: **계획 후 수행**
-- Score <= 2: **백로그 등록**
+- Score >= 6: **Execute immediately** (Quick Win)
+- Score 3-5: **Plan then execute**
+- Score <= 2: **Add to backlog**
 
-출력:
+Output:
 ```markdown
 ## Optimization Priority Matrix
 | Rank | Issue | Layer | Impact | Effort | Risk | Score | Action |
 ```
 
-### STEP 2: Execute Optimizations (Score >= 6 먼저, 내림차순)
+### STEP 2: Execute Optimizations (Score >= 6 first, descending order)
 
-각 최적화마다:
-1. **Before**: 해당 메트릭 현재 값 기록
-2. **Implement**: 변경 구현 (team lead가 직접 수행)
-3. **After**: 동일 메트릭 재측정
-4. **Record**: 결과를 `.claude/pge-perf/optimization-result.md`에 추가
+For each optimization:
+1. **Before**: Record the current value of the relevant metric
+2. **Implement**: Implement the change (performed directly by the team lead)
+3. **After**: Re-measure the same metric
+4. **Record**: Append results to `.claude/pge-perf/optimization-result.md`
 
 ### STEP 3: Optimization Result
 
-`.claude/pge-perf/optimization-result.md`에 저장:
+Save to `.claude/pge-perf/optimization-result.md`:
 
 ```markdown
 # Optimization Result — {ISO timestamp}
@@ -370,21 +370,21 @@ Baseline metric: [현재 수치]
 | # | Issue | Score | Reason for Deferral |
 ```
 
-**필수 출력** — 각 최적화에 `Before`, `After`, `Δ%`가 없으면 Phase 3 진행 불가.
+**Required output** — If any optimization is missing `Before`, `After`, or `Δ%`, Phase 3 cannot proceed.
 
 ### Optimizer Rules
-- Quick Win (Score >= 6)을 **반드시 먼저** 처리
-- 각 최적화 후 **기존 테스트가 통과**하는지 확인
-- Risk 4-5 항목은 구현 전 사용자 확인 요청
-- 8개 이상 파일 변경 시 분할 가능 여부 검토
+- Quick Wins (Score >= 6) must be processed **first**
+- After each optimization, **verify that existing tests pass**
+- Request user confirmation before implementing Risk 4-5 items
+- If 8+ files are changed, review whether the change can be split
 
 ---
 
-## Phase 3: Benchmarker — Before/After 비교 증명
+## Phase 3: Benchmarker — Prove Before/After Comparison
 
-**반드시 fresh context Agent subagent으로 실행** (독립 검증).
+**Must be run as a fresh context Agent subagent** (independent verification).
 
-### Benchmarker Agent 프롬프트:
+### Benchmarker Agent Prompt:
 
 ```
 You are the BENCHMARKER in a Profiler-Optimizer-Benchmarker workflow.
@@ -420,11 +420,11 @@ For each metric in perf-target.md, re-measure using the SAME method:
 - No functionality removed to "improve" performance?
 
 ### D-bis. Devil's Advocate Checklist (Performance)
-1. 가장 측정이 누락되었을 가능성이 높은 layer는?
-2. Baseline 측정이 신뢰할 수 있는 조건에서 수행되었는가?
-3. 최적화가 기능 회귀를 유발하지 않았는가?
-4. Before/After 측정이 동일 조건인가? (같은 데이터, 같은 파라미터)
-5. 실제 측정했는가, 코드 분석만 했는가?
+1. Which layer is most likely to have a missing measurement?
+2. Was the baseline measured under reliable conditions?
+3. Did the optimization introduce any functional regression?
+4. Were the before/after measurements taken under identical conditions? (same data, same parameters)
+5. Were actual measurements performed, or was it code analysis only?
 
 ### D-ter. Anti-Pattern Check (Performance)
 | Anti-Pattern | How to Detect |
@@ -436,11 +436,11 @@ For each metric in perf-target.md, re-measure using the SAME method:
 | Removed functionality to "improve" perf | Feature regression |
 
 ### E. Score 5 Dimensions (1-10)
-1. Query Performance — DB 쿼리 개선도
-2. Response Time — API 레이턴시 개선도
-3. Client Performance — 렌더링/번들 개선도
-4. Measurement Quality — 측정 방법의 신뢰성 (**HARD FAIL if < 6**)
-5. Regression Safety — 기능 회귀 없음 (**HARD FAIL if < 6**)
+1. Query Performance — Degree of DB query improvement
+2. Response Time — Degree of API latency improvement
+3. Client Performance — Degree of rendering/bundle improvement
+4. Measurement Quality — Reliability of measurement methodology (**HARD FAIL if < 6**)
+5. Regression Safety — No functional regression (**HARD FAIL if < 6**)
 
 ### F. Verdict
 - **IMPROVED**: All >= 7, at least one metric improved >= 20%
@@ -453,12 +453,12 @@ Write to .claude/pge-perf/benchmark-eval.md.
 Return verdict + key findings.
 ```
 
-### Benchmarker 결과 처리
+### Benchmarker Result Handling
 
-- **IMPROVED**: Archive → Performance Optimization Report 출력
-- **MARGINAL**: Archive → Report 출력 + 추가 최적화 안내
-- **NO_CHANGE**: 원인 분석 → Phase 2 재실행 또는 에스컬레이션
-- **REGRESSION**: 롤백 → 원인 분석 → Phase 2 재실행 (fresh context)
+- **IMPROVED**: Archive → Output Performance Optimization Report
+- **MARGINAL**: Archive → Output Report + provide guidance for further optimization
+- **NO_CHANGE**: Analyze root cause → Re-run Phase 2 or escalate
+- **REGRESSION**: Rollback → Analyze root cause → Re-run Phase 2 (fresh context)
 
 ---
 
@@ -467,18 +467,18 @@ Return verdict + key findings.
 ```
 PERFORMANCE OPTIMIZATION REPORT
 ════════════════════════════════════════
-Target:          [최적화 대상]
+Target:          [optimization target]
 Date:            {ISO timestamp}
 Verdict:         {IMPROVED | MARGINAL | NO_CHANGE | REGRESSION}
 
 ── Profiling ──
-Bottlenecks:     [식별된 병목 수]
+Bottlenecks:     [number of identified bottlenecks]
 Layers affected: {DB, Server, Client, Network}
 
 ── Optimization ──
-Applied:         [적용된 최적화 수]
-Quick Wins:      [Score >= 6 항목 수]
-Backlogged:      [Score <= 2 항목 수]
+Applied:         [number of applied optimizations]
+Quick Wins:      [number of Score >= 6 items]
+Backlogged:      [number of Score <= 2 items]
 
 ── Benchmark ──
 | Metric             | Before  | After   | Δ%     |
@@ -494,33 +494,33 @@ Contributors:    query-profiler, code-analyzer, load-tester
 Evaluator:       independent benchmarker (fresh context)
 
 Backlog:
-  - [Score <= 2 항목들]
+  - [Score <= 2 items]
 ════════════════════════════════════════
 ```
 
 ### Archive
 
-`.claude/pge-perf/history/{YYYYMMDD}T{HHMM}_{target-slug}.md` 생성 (under 100 lines).
+Create `.claude/pge-perf/history/{YYYYMMDD}T{HHMM}_{target-slug}.md` (under 100 lines).
 
 ---
 
 ## Escalation Rules
 
-- **Phase 1 실패**: 프로파일링 도구 접근 불가 시 → 에스컬레이션 + 코드 분석만 수행
-- **Phase 2 실패**: 3-strike rule — 최적화 3회 시도 후 개선 없으면 STOP
-- **Phase 3 REGRESSION**: 즉시 롤백 → 원인 분석 → 사용자 확인 후 재시도
-- **FAIL loop 2+회**: 중단 + 사용자 에스컬레이션
-- **성능 개선 불가**: "ALREADY_OPTIMIZED" verdict + 현재 상태 보고서 출력
+- **Phase 1 failure**: If profiling tools are inaccessible → escalate + perform code analysis only
+- **Phase 2 failure**: 3-strike rule — STOP after 3 optimization attempts with no improvement
+- **Phase 3 REGRESSION**: Immediately rollback → analyze root cause → retry after user confirmation
+- **FAIL loop 2+ times**: Halt + escalate to user
+- **Performance cannot be improved**: Issue "ALREADY_OPTIMIZED" verdict + output current state report
 
 ---
 
 ## Important Rules
 
-- 각 Phase의 **필수 출력**이 없으면 다음 Phase 진행 불가
-- `/pge-perf` 작업은 **프로토콜 스킵 불가**
-- Phase 1 에이전트는 **코드를 수정하지 않음** — 분석/측정만 수행
-- 에이전트 간 **SendMessage로 발견사항을 반드시 공유** — 사일로 금지
-- 분석 완료 후 **반드시 팀 shutdown** — 리소스 정리
-- Phase 2 최적화는 **team lead (메인 에이전트)만 수행**
-- Phase 3 Benchmarker는 **반드시 fresh context Agent subagent**으로 실행
-- **실제 측정 실행** 필수 — "I assume it improved" 불가
+- If the **required output** for any Phase is missing, the next Phase cannot proceed
+- `/pge-perf` tasks **cannot skip the protocol**
+- Phase 1 agents **do not modify code** — analysis/measurement only
+- Agents **must share findings via SendMessage** — siloed work is prohibited
+- After analysis is complete, **the team must be shut down** — clean up resources
+- Phase 2 optimizations are **performed only by the team lead (main agent)**
+- Phase 3 Benchmarker **must be run as a fresh context Agent subagent**
+- **Actual measurement execution** is required — "I assume it improved" is not acceptable

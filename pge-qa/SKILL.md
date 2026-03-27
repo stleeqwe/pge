@@ -23,9 +23,9 @@ allowed-tools:
 
 # /pge-qa — PGE QA Protocol (Scanner-Fixer-Verifier)
 
-사용자가 작업 요청에 `/pge-qa`를 붙이면 전체 QA 프로토콜을 강제 실행한다.
+When the user appends `/pge-qa` to a task request, the full QA protocol is enforced.
 
-## Project Initialization (첫 실행 시)
+## Project Initialization (First Run)
 
 ```bash
 mkdir -p .claude/pge-qa/baselines
@@ -36,22 +36,22 @@ if [ -f .gitignore ] && ! grep -q ".claude/pge-qa/" .gitignore 2>/dev/null; then
 fi
 ```
 
-### 플랫폼 자동 감지
+### Automatic Platform Detection
 
 ```
-Flutter:    Glob pubspec.yaml → "flutter:" 섹션
-React/Next: Glob package.json → "react" 의존성
-Vue/Nuxt:   Glob package.json → "vue" 의존성
+Flutter:    Glob pubspec.yaml → "flutter:" section
+React/Next: Glob package.json → "react" dependency
+Vue/Nuxt:   Glob package.json → "vue" dependency
 ```
 
-**필수 출력:** `Platform: {Flutter | React | Vue | Unknown}`
+**Required output:** `Platform: {Flutter | React | Vue | Unknown}`
 
-### QA Coverage Map 초기화
+### QA Coverage Map Initialization
 
-`docs/qa-coverage-map.md`가 없으면 사용자에게 알림:
-> "QA Coverage Map이 없습니다. 프로젝트를 분석하여 `docs/qa-coverage-map.md`를 생성할까요?"
+If `docs/qa-coverage-map.md` does not exist, notify the user:
+> "No QA Coverage Map found. Would you like me to analyze the project and generate `docs/qa-coverage-map.md`?"
 
-승인 시 프로젝트를 분석하여 자동 생성:
+Upon approval, analyze the project and auto-generate:
 
 ```markdown
 # QA Coverage Map
@@ -61,12 +61,12 @@ Vue/Nuxt:   Glob package.json → "vue" 의존성
 |---|----------------|------------|----------|
 
 ## 2. User Flow Map
-### Flow 1: {플로우명}
-[시작] → Screen A → Screen B → [완료]
+### Flow 1: {flow name}
+[Start] → Screen A → Screen B → [Complete]
 - Happy path / Edge cases / State transitions
 
 ## 3. State Combination Matrix
-### Screen: {화면명}
+### Screen: {screen name}
 | # | State | Condition | Expected UI | Test exists? | Test file |
 |---|-------|-----------|-------------|-------------|-----------|
 | 1 | loading | data fetching | spinner/skeleton | Y/N | |
@@ -87,86 +87,86 @@ Vue/Nuxt:   Glob package.json → "vue" 의존성
 |---|------|------------|---------------------|
 ```
 
-이 맵은 매 `/pge-qa` 실행 시 갱신된다. Phase 1이 맵을 읽고 테스트 범위를 결정, Phase 3이 맵 항목별 검증.
+This map is updated on every `/pge-qa` run. Phase 1 reads the map and determines test scope, Phase 3 verifies each map entry.
 
 ## CRITICAL: Agent Spawning Rules
 
-1. **TeamCreate를 사용하여 팀을 구성**할 것. 단순 Agent subagent 스폰 금지.
-2. **Explore 서브에이전트 사용 금지.** 모든 teammate는 `general-purpose` agent로 스폰.
-3. **각 teammate는 서로 SendMessage로 발견사항 공유.** 사일로 금지.
-4. **TaskCreate로 작업 목록 생성**하고 teammate에게 할당.
-5. **Phase 1(Scanner) 에이전트는 읽기 전용** — 코드 수정은 Phase 2에서 team lead만.
+1. **Use TeamCreate to compose the team.** Do not spawn plain Agent subagents.
+2. **Do not use Explore subagents.** All teammates must be spawned as `general-purpose` agents.
+3. **Each teammate shares findings with others via SendMessage.** No silos allowed.
+4. **Use TaskCreate to create a task list** and assign tasks to teammates.
+5. **Phase 1 (Scanner) agents are read-only** — code modifications happen only in Phase 2 by the team lead.
 
 ## Input
 
-$ARGUMENTS — QA 대상 설명
+$ARGUMENTS — Description of the QA target
 
 ## Mode Detection
 
-- **Full**: 기본값, 전체 앱/프로젝트 QA
-- **Quick**: "빠르게", "간단히", 특정 화면/기능명 → 해당 영역만
-- **Diff-aware**: "변경분", "PR", "branch" → git diff main...HEAD 기반
-- **Regression**: "회귀", "baseline 비교" → 이전 baseline 대비
+- **Full**: Default, full app/project QA
+- **Quick**: "quick", "brief", specific screen/feature name → scan only that area
+- **Diff-aware**: "changes", "PR", "branch" → based on git diff main...HEAD
+- **Regression**: "regression", "baseline comparison" → compared against previous baseline
 
-**필수 출력:** `QA Mode: {Full | Quick | Diff-aware | Regression}`
+**Required output:** `QA Mode: {Full | Quick | Diff-aware | Regression}`
 
 ### Diff-aware Mode
 ```bash
 git diff main...HEAD --name-only
 ```
-변경 파일 → qa-coverage-map에서 해당 화면/기능 추출 → 해당 영역만 Scanner 대상.
+Changed files → extract relevant screens/features from qa-coverage-map → scan only those areas.
 
 ---
 
 ## Issue Taxonomy (9 Categories)
 
-| # | Category | Weight | 검증 방법 |
-|---|----------|--------|----------|
-| 1 | **Log/Crash** | 15% | flutter analyze, try-catch 범위, FlutterError 핸들링 |
-| 2 | **Routing/Navigation** | 10% | GoRoute/Navigator Grep, 네비게이션 그래프, 딥링크 |
-| 3 | **Visual/UI** | 10% | 토큰 사용률, 하드코딩, 위젯 트리 |
-| 4 | **Functional** | 15% | 상태 처리(loading/error/empty), 폼 유효성, 비즈니스 로직 |
-| 5 | **UX** | 10% | 터치 타겟 크기, 확인 다이얼로그, 피드백 UI |
-| 6 | **Performance** | 10% | 불필요한 리빌드, N+1, 메모리 누수 |
-| 7 | **Content** | 5% | 하드코딩 문자열, placeholder, i18n |
-| 8 | **Accessibility** | 10% | Semantics, 색상 대비, 터치 타겟 |
-| 9 | **Platform/Native** | 15% | 권한, 생명주기, 딥링크, 오프라인, 보안 저장소 |
+| # | Category | Weight | Verification Method |
+|---|----------|--------|---------------------|
+| 1 | **Log/Crash** | 15% | flutter analyze, try-catch coverage, FlutterError handling |
+| 2 | **Routing/Navigation** | 10% | GoRoute/Navigator Grep, navigation graph, deep links |
+| 3 | **Visual/UI** | 10% | Token usage rate, hardcoded values, widget tree |
+| 4 | **Functional** | 15% | State handling (loading/error/empty), form validation, business logic |
+| 5 | **UX** | 10% | Touch target size, confirmation dialogs, feedback UI |
+| 6 | **Performance** | 10% | Unnecessary rebuilds, N+1, memory leaks |
+| 7 | **Content** | 5% | Hardcoded strings, placeholders, i18n |
+| 8 | **Accessibility** | 10% | Semantics, color contrast, touch targets |
+| 9 | **Platform/Native** | 15% | Permissions, lifecycle, deep links, offline, secure storage |
 
 ### Severity Levels
 
 | Severity | Definition |
 |----------|------------|
-| CRITICAL | 크래시, 데이터 손실, 보안 취약점 |
-| HIGH | 주요 기능 작동 불가, 우회 불가 |
-| MEDIUM | 기능 작동하지만 문제 있음, 우회 가능 |
-| LOW | 사소한 UI/코드 품질 이슈 |
-| COSMETIC | 스타일, 정렬 등 미세 이슈 |
+| CRITICAL | Crash, data loss, security vulnerability |
+| HIGH | Major feature broken, no workaround |
+| MEDIUM | Feature works but has issues, workaround available |
+| LOW | Minor UI/code quality issue |
+| COSMETIC | Style, alignment, and other minor visual issues |
 
 ### Health Score Grading
 
 | Grade | Score | Meaning |
 |-------|-------|---------|
-| A | 90-100 | 프로덕션 배포 가능, 거의 이슈 없음 |
-| B | 75-89 | 배포 가능, 사소한 이슈 존재 |
-| C | 60-74 | 주요 이슈 수정 필요 |
-| D | 40-59 | 심각한 이슈 다수 |
-| F | 0-39 | 근본적 문제, 아키텍처 재검토 권고 |
+| A | 90-100 | Production-ready, almost no issues |
+| B | 75-89 | Deployable, minor issues present |
+| C | 60-74 | Major issues need fixing |
+| D | 40-59 | Numerous serious issues |
+| F | 0-39 | Fundamental problems, architecture review recommended |
 
 ---
 
 ## Role Catalog
 
-오케스트레이터가 task에 맞는 역할을 **2~4명** 선택. **code-quality-scanner는 항상 포함**.
+The orchestrator selects **2-4 roles** suited to the task. **code-quality-scanner is always included**.
 
-| Role | 전문 영역 | 커버 카테고리 | 언제 선택 |
-|------|----------|-------------|----------|
-| **code-quality-scanner** | 정적 분석, lint, 코드 패턴 | LC, FN, CT, PF | **항상 포함** (필수) |
-| **test-coverage-analyst** | 테스트 누락, 경로 분석, qa-coverage-map 대조 | FN, PF | 테스트 파일 존재 시 |
-| **a11y-platform-checker** | 접근성 + 플랫폼 네이티브 | A11Y, PN | 모바일 앱 시 |
-| **ux-flow-checker** | 사용자 플로우, 상태 처리, 네비게이션 | RN, UX, VI, FN | UI 코드 포함 시 |
-| **security-auditor** | 보안 취약점, 인증/인가, 보안 저장소 | LC, PN | 사용자 입력/인증 코드 시 |
+| Role | Expertise | Covers Categories | When to Select |
+|------|-----------|-------------------|----------------|
+| **code-quality-scanner** | Static analysis, lint, code patterns | LC, FN, CT, PF | **Always included** (required) |
+| **test-coverage-analyst** | Missing tests, path analysis, qa-coverage-map cross-reference | FN, PF | When test files exist |
+| **a11y-platform-checker** | Accessibility + platform native | A11Y, PN | For mobile apps |
+| **ux-flow-checker** | User flows, state handling, navigation | RN, UX, VI, FN | When UI code is involved |
+| **security-auditor** | Security vulnerabilities, auth/authz, secure storage | LC, PN | When user input/auth code is involved |
 
-카탈로그 외 역할도 task에 맞게 정의 가능. 역할 선택에 Rationale 필수.
+Roles outside the catalog can also be defined as needed for the task. Rationale is required for role selection.
 
 ---
 
@@ -174,45 +174,45 @@ git diff main...HEAD --name-only
 
 ### STEP 1: Task Analysis + Role Selection
 
-**필수 출력:**
+**Required output:**
 ```
 QA Mode: {Full | Quick | Diff-aware | Regression}
 Platform: {Flutter | React | Vue}
 Selected roles: [{role1}, {role2}, ...]
-Rationale: [왜 이 역할들이 필요한지]
-Scan scope: {전체 | 특정 화면 | git diff 변경분}
+Rationale: [Why these roles are needed]
+Scan scope: {Full | Specific screen | git diff changes}
 ```
 
 ### STEP 2: Create Scanner Team
 
 **TeamCreate** → Agent(team_name="pge-qa-scan-{slug}", name="{role}", run_in_background=true)
 
-각 에이전트 프롬프트에 포함:
-- 팀명, 역할, 전문 영역, 담당 카테고리
-- qa-coverage-map 읽기 지시 (있을 경우)
-- 카테고리별 구체적 Grep/Read 패턴
-- SendMessage 공유 규칙
-- 읽기 전용 제약 + TaskUpdate 지시
+Each agent prompt includes:
+- Team name, role, expertise, assigned categories
+- Instruction to read qa-coverage-map (if available)
+- Specific Grep/Read patterns per category
+- SendMessage sharing rules
+- Read-only constraint + TaskUpdate instruction
 
 ### STEP 3: Wait + Synthesize
 
-에이전트들이 SendMessage로 발견사항 상호 공유. 완료 후 종합.
+Agents share findings with each other via SendMessage. Synthesize after completion.
 
 ### STEP 4: QA Profile Report
 
-`.claude/pge-qa/qa-profile.md`에 저장:
+Save to `.claude/pge-qa/qa-profile.md`:
 
 ```
 ═══ QA PROFILE REPORT ═══
 
 ## Context
-Target: [분석 대상]
+Target: [Analysis target]
 Platform: {Flutter | React | Vue}
 Mode: {Full | Quick | Diff-aware | Regression}
 Date: {ISO timestamp}
 
 ## Team Analysis
-{각 역할별 핵심 발견사항}
+{Key findings per role}
 
 ## Health Score Baseline
 | # | Category | Score (0-100) | Issues | Critical | Weight |
@@ -240,41 +240,41 @@ Date: {ISO timestamp}
 ═══════════════════════════════════════
 ```
 
-**Phase Gate:** Health Score + Issue Summary가 없으면 Phase 2 진행 불가.
+**Phase Gate:** Cannot proceed to Phase 2 without Health Score + Issue Summary.
 
 ### STEP 5: Shutdown Scanner Team
 
 ---
 
-## Phase 2: Fixer — Priority 순서로 수정
+## Phase 2: Fixer — Fix by Priority Order
 
 ### STEP 1: Triage + Priority Matrix
 
-**Priority Score = Severity × 2 - Effort - Risk**
+**Priority Score = Severity x 2 - Effort - Risk**
 
 | Factor | 5 (Best) | 1 (Worst) |
 |--------|----------|-----------|
 | Severity | CRITICAL | COSMETIC |
-| Effort | 한 줄 변경 | 대규모 리팩토링 |
-| Risk | 부작용 없음 | 기능 회귀 가능 |
+| Effort | One-line change | Large-scale refactoring |
+| Risk | No side effects | Possible feature regression |
 
 | Score | Tier | Action |
 |-------|------|--------|
-| >= 6 | Quick Win | 즉시 수행 |
-| 3-5 | Standard | 계획 후 수행 |
-| <= 2 | Backlog | 기록만 |
+| >= 6 | Quick Win | Execute immediately |
+| 3-5 | Standard | Plan then execute |
+| <= 2 | Backlog | Record only |
 
-### STEP 2: Fix Loop (Quick Win 먼저, Score 내림차순)
+### STEP 2: Fix Loop (Quick Wins first, descending Score)
 
-각 fix마다:
-1. **BEFORE**: 현재 코드 캡처 (file:line + 스니펫)
-2. **FIX**: 최소 변경 구현 (team lead만)
-3. **TEST**: 기존 테스트 통과 확인 + regression test 생성
-4. **AFTER**: 변경 코드 캡처
-5. **COMMIT**: atomic commit — `fix(qa-{category}): {설명}`
-6. **RECORD**: Fix Result에 Before/After 증거 추가
+For each fix:
+1. **BEFORE**: Capture current code (file:line + snippet)
+2. **FIX**: Implement minimal change (team lead only)
+3. **TEST**: Verify existing tests pass + generate regression test
+4. **AFTER**: Capture changed code
+5. **COMMIT**: Atomic commit — `fix(qa-{category}): {description}`
+6. **RECORD**: Add Before/After evidence to Fix Result
 
-**WTF-likelihood 자기 조절:**
+**WTF-likelihood self-regulation:**
 ```
 Start at 0%
 Each revert:                +15%
@@ -282,23 +282,23 @@ Each fix touching >3 files: +5%
 After fix 15:               +1% per additional fix
 Touching unrelated files:   +20%
 ```
-- >= 50%: STOP, 사용자 확인 요청
-- **하드캡: 50 fixes**
+- >= 50%: STOP, request user confirmation
+- **Hard cap: 50 fixes**
 
-**3-strike rule:** 3회 fix 실패 → STOP + 에스컬레이션
-**Revert on regression:** `git revert HEAD` 즉시 실행
+**3-strike rule:** 3 fix failures → STOP + escalation
+**Revert on regression:** Execute `git revert HEAD` immediately
 
 ### STEP 3: Cross-Skill Routing
 
-Phase 1 cross-skill 이슈 처리:
-- Backend consistency → `/pge` 전환 권고
-- Performance bottleneck → `/pge-perf` 전환 권고
-- Design/UX quality → `/pge-design` 전환 권고
-- Pure QA → Phase 2에서 직접 fix
+Handle Phase 1 cross-skill issues:
+- Backend consistency → Recommend switching to `/pge`
+- Performance bottleneck → Recommend switching to `/pge-perf`
+- Design/UX quality → Recommend switching to `/pge-design`
+- Pure QA → Fix directly in Phase 2
 
 ### STEP 4: Fix Result Manifest
 
-`.claude/pge-qa/fix-result.md`에 저장:
+Save to `.claude/pge-qa/fix-result.md`:
 ```markdown
 # Fix Result — {ISO timestamp}
 
@@ -318,15 +318,15 @@ Phase 1 cross-skill 이슈 처리:
 | Screen | State | Before (Test?) | After (Test?) |
 ```
 
-**Phase Gate:** 각 fix에 Before/After 증거 필수.
+**Phase Gate:** Before/After evidence required for each fix.
 
 ---
 
-## Phase 3: Verifier — 독립 검증
+## Phase 3: Verifier — Independent Verification
 
-**반드시 fresh context Agent subagent으로 실행.**
+**Must be executed as a fresh context Agent subagent.**
 
-### Verifier Agent 프롬프트:
+### Verifier Agent Prompt:
 
 ```
 You are the VERIFIER in a Scanner-Fixer-Verifier QA workflow.
@@ -335,51 +335,51 @@ YOUR ROLE: Independently verify that QA fixes are complete and correct.
 You are checking SOMEONE ELSE's work. Be skeptical. Do NOT assume correctness.
 
 Score Calibration:
-9-10: 거의 모든 이슈 해결, regression 없음. 드물다.
-7-8:  주요 이슈 해결, 프로덕션 배포 가능.
-5-6:  일부 해결, 미해결 이슈 존재.
-3-4:  명백한 누락.
-1-2:  fix가 문제를 악화시킴.
+9-10: Nearly all issues resolved, no regressions. Rare.
+7-8:  Major issues resolved, production-deployable.
+5-6:  Some resolved, unresolved issues remain.
+3-4:  Obvious omissions.
+1-2:  Fixes made things worse.
 
 ## Inputs
 1. QA Profile: .claude/pge-qa/qa-profile.md
 2. Fix Result: .claude/pge-qa/fix-result.md
-3. QA Coverage Map: docs/qa-coverage-map.md (있을 경우)
+3. QA Coverage Map: docs/qa-coverage-map.md (if available)
 
 ## Verification Process
 
-### A. Health Score 재계산
-9개 카테고리 모두 Phase 1과 동일한 Grep/Read 방법으로 재측정.
+### A. Recalculate Health Score
+Re-measure all 9 categories using the same Grep/Read methods as Phase 1.
 
-### B. Fix 개별 검증
-각 fix: 코드 Read로 변경 확인, regression test 실행, 기존 테스트 통과.
+### B. Verify Each Fix Individually
+For each fix: Read the code to confirm changes, run regression tests, verify existing tests pass.
 
 ### C. Coverage Map Walk
-대상 화면의 State Combination Matrix 항목별:
-- 테스트 존재 + meaningful assertion 확인
-- User Flow happy path + edge case 확인
+For each entry in the target screen's State Combination Matrix:
+- Confirm test exists + meaningful assertion
+- Verify User Flow happy path + edge cases
 
 ### D. Regression Check
-- 기존 모든 테스트 통과?
-- fix로 인해 새 이슈 발생?
+- Do all existing tests pass?
+- Did any fix introduce new issues?
 
 ### E. Devil's Advocate (QA)
-1. fix가 증상만 치료하고 근본 원인을 놓치지 않았는가?
-2. test가 실제 이슈를 검증하는가, 형식적인가?
-3. security fix가 모든 attack vector를 커버하는가?
-4. regression test가 실제로 실행 가능한가?
-5. qa-coverage-map에 등록 안 된 화면이 있지 않은가?
-6. "Test exists? = Y"가 실제 유효한 테스트인가?
+1. Did the fix only treat the symptom while missing the root cause?
+2. Does the test actually verify the real issue, or is it superficial?
+3. Does the security fix cover all attack vectors?
+4. Are the regression tests actually runnable?
+5. Are there screens not registered in the qa-coverage-map?
+6. Is "Test exists? = Y" backed by an actually valid test?
 
 ### F. Anti-Pattern Check
 | Anti-Pattern | How to Detect |
 |---|---|
-| "Fixed" without test | Fix 있지만 관련 테스트 없음 |
-| Symptom-only fix | 근본 원인 미해결 |
-| Over-engineering fix | 1줄 fix를 위한 대규모 리팩토링 |
-| Test that always passes | assertion이 trivial |
-| Security theater | 형식적 검증만 |
-| Functionality removal | 기능 제거로 "간결해짐" 주장 |
+| "Fixed" without test | Fix exists but no related test |
+| Symptom-only fix | Root cause unresolved |
+| Over-engineering fix | Large-scale refactoring for a 1-line fix |
+| Test that always passes | Assertion is trivial |
+| Security theater | Superficial verification only |
+| Functionality removal | Claiming "simplification" by removing features |
 
 ### G. Score 9 Categories (0-100 each)
 **HARD FAIL:** Log/Crash < 60, Platform/Native security < 60
@@ -388,18 +388,18 @@ Score Calibration:
 | Category | Before | After | Δ |
 
 ### I. Verdict
-- **PASS**: Health Score improved, grade B+ 이상, no hard-fail
+- **PASS**: Health Score improved, grade B+ or above, no hard-fail
 - **CONDITIONAL PASS**: Health Score improved, grade C+, no hard-fail
-- **FAIL**: Hard-fail, Health Score decreased, or grade D 이하
+- **FAIL**: Hard-fail, Health Score decreased, or grade D or below
 
 ### J. Write Report → .claude/pge-qa/qa-eval.md
 ```
 
-### Verifier 결과 처리
-- **PASS** → Archive → QA Report 출력
-- **CONDITIONAL PASS** → 미달 항목 수정 → Archive (재검증 불필요)
-- **FAIL** → 수정 → Verifier 재실행 (fresh context)
-- **FAIL loop 2+회** → 중단 + 에스컬레이션
+### Verifier Result Handling
+- **PASS** → Archive → Output QA Report
+- **CONDITIONAL PASS** → Fix unmet items → Archive (no re-verification needed)
+- **FAIL** → Fix → Re-run Verifier (fresh context)
+- **FAIL loop 2+ times** → Halt + escalation
 
 ---
 
@@ -408,7 +408,7 @@ Score Calibration:
 ```
 QA REPORT
 ════════════════════════════════════════
-Target:          [QA 대상]
+Target:          [QA target]
 Platform:        {Flutter | React | Vue}
 Mode:            {Full | Quick | Diff-aware | Regression}
 Date:            {ISO timestamp}
@@ -456,22 +456,22 @@ Cross-Skill:
 
 ## Escalation Rules
 
-- **Phase 1 실패**: 플랫폼 Unknown → 사용자에게 명시 요청
-- **Phase 2 실패**: 3-strike, 50 fix 하드캡
-- **Phase 3 FAIL loop 2+회**: 중단 + 에스컬레이션
-- **Health Score F (< 40)**: 아키텍처 재검토 권고
-- **Cross-skill > 50%**: 해당 PGE skill 먼저 실행 권고
+- **Phase 1 failure**: Platform Unknown → Request explicit specification from user
+- **Phase 2 failure**: 3-strike, 50 fix hard cap
+- **Phase 3 FAIL loop 2+ times**: Halt + escalation
+- **Health Score F (< 40)**: Architecture review recommended
+- **Cross-skill > 50%**: Recommend running the relevant PGE skill first
 
 ---
 
 ## Important Rules
 
-- 각 Phase **필수 출력** 없으면 다음 Phase 진행 불가
-- `/pge-qa` 작업은 **프로토콜 스킵 불가**
-- Phase 1 에이전트는 **코드 수정 금지**
-- Phase 2 수정은 **team lead만** — atomic commit per fix
-- Phase 3 Verifier는 **fresh context Agent subagent**
-- **실제 Grep/Read 측정** 필수 — "I assume it's fine" 불가
-- SendMessage 상호 공유 필수, 팀 shutdown 필수
-- Before/After 코드 증거 필수
-- 50 fix 하드캡, 3-strike escalation
+- Cannot proceed to next Phase without each Phase's **required output**
+- `/pge-qa` tasks **cannot skip the protocol**
+- Phase 1 agents **must not modify code**
+- Phase 2 modifications are **team lead only** — atomic commit per fix
+- Phase 3 Verifier must be a **fresh context Agent subagent**
+- **Actual Grep/Read measurement** required — "I assume it's fine" is not acceptable
+- SendMessage mutual sharing required, team shutdown required
+- Before/After code evidence required
+- 50 fix hard cap, 3-strike escalation

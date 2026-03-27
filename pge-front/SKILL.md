@@ -25,9 +25,9 @@ allowed-tools:
 
 # /pge-front — PGE Frontend Quality Protocol
 
-사용자가 작업 요청에 `/pge-front`를 붙이면 전체 프론트엔드 QA 프로토콜을 강제 실행한다.
+When the user appends `/pge-front` to a task request, force-execute the full frontend QA protocol.
 
-## Project Initialization (첫 실행 시)
+## Project Initialization (First Run)
 
 ```bash
 mkdir -p .claude/pge-front/history .claude/pge-front/baselines
@@ -37,148 +37,148 @@ if [ -f .gitignore ] && ! grep -q ".claude/pge-front/" .gitignore 2>/dev/null; t
 fi
 ```
 
-### 플랫폼 자동 감지
+### Automatic Platform Detection
 ```
-Flutter:    Glob pubspec.yaml → "flutter:" 섹션
-React/Next: Glob package.json → "react" 의존성
-Vue/Nuxt:   Glob package.json → "vue" 의존성
+Flutter:    Glob pubspec.yaml → "flutter:" section
+React/Next: Glob package.json → "react" dependency
+Vue/Nuxt:   Glob package.json → "vue" dependency
 ```
-**필수 출력:** `Platform: {Flutter | React | Vue | Unknown}`
+**Required output:** `Platform: {Flutter | React | Vue | Unknown}`
 
-### 디자인 시스템 + Design System Map 탐지
+### Design System + Design System Map Detection
 
-`docs/design-system-map.md`가 없으면:
-> "Design System Map이 없습니다. 프로젝트를 분석하여 생성할까요?"
+If `docs/design-system-map.md` does not exist:
+> "No Design System Map found. Shall I analyze the project and generate one?"
 
-승인 시 자동 생성 (Tokens, Shared Components, Screens, Cross-Screen Patterns).
-이 맵은 `/pge-front`가 **갱신 권한** 보유. `/pge-design`은 읽기 전용.
+On approval, auto-generate (Tokens, Shared Components, Screens, Cross-Screen Patterns).
+This map is owned by `/pge-front` with **update permissions**. `/pge-design` has read-only access.
 
-**필수 출력:**
+**Required output:**
 ```
 Design System: {detected files or "None"}
-Token files: {color, typography, spacing, radius — 존재 여부}
+Token files: {color, typography, spacing, radius — presence status}
 ```
-플랫폼/디자인 시스템 미감지 시 다음 Phase 진행 불가.
+Cannot proceed to next Phase if platform/design system is not detected.
 
 ## CRITICAL: Agent Spawning Rules
 
-1. **TeamCreate** 사용 필수. 단순 Agent subagent 금지.
-2. **Explore 서브에이전트 사용 금지.** general-purpose만.
-3. **SendMessage로 상호 공유** 필수. 사일로 금지.
-4. **TaskCreate** 작업 목록 생성 + teammate 할당.
-5. **Phase 1 에이전트는 읽기 전용** — 수정은 Phase 2 team lead만.
+1. **Must use TeamCreate.** Simple Agent subagent is prohibited.
+2. **Do not use Explore subagents.** General-purpose only.
+3. **Must share via SendMessage.** Silos are prohibited.
+4. **TaskCreate** to generate task lists + assign to teammates.
+5. **Phase 1 agents are read-only** — only Phase 2 team lead may modify.
 
 ## Input
 
-$ARGUMENTS — 프론트엔드 점검 대상
+$ARGUMENTS — Frontend inspection target
 
 ## Mode Detection
 
-- **Full**: 전체 앱 프론트엔드 QA
-- **Quick**: 특정 화면/기능만
-- **Diff-aware**: git diff main...HEAD 변경분만
+- **Full**: Full app frontend QA
+- **Quick**: Specific screen/feature only
+- **Diff-aware**: Changed files from git diff main...HEAD only
 
-**필수 출력:** `Front Mode: {Full | Quick | Diff-aware}`
+**Required output:** `Front Mode: {Full | Quick | Diff-aware}`
 
 ---
 
-## 8개 점검 영역 + Front Health Score
+## 8 Inspection Categories + Front Health Score
 
 ### Category 1: Design Token Compliance (15%)
 
-| # | 항목 | Grep 패턴 | 심각도 |
+| # | Item | Grep Pattern | Severity |
 |---|------|----------|--------|
-| DT1 | 하드코딩 색상 | `Color\(0x\|Colors\.\|#[0-9a-fA-F]{3,8}\|rgba?\(` | HIGH |
-| DT2 | 하드코딩 폰트 | `fontSize:\s*\d+\|font-size:\s*\d+px` | HIGH |
-| DT3 | 하드코딩 간격 | `EdgeInsets\.\w+\(\s*\d+\|\d+px\s*(;\|})` | MEDIUM |
-| DT4 | 하드코딩 반지름 | `BorderRadius\.circular\(\s*\d+\|border-radius:\s*\d+px` | MEDIUM |
-| DT5 | 토큰 참조율 | 토큰_참조 / (토큰_참조 + 하드코딩) × 100 | — |
+| DT1 | Hardcoded colors | `Color\(0x\|Colors\.\|#[0-9a-fA-F]{3,8}\|rgba?\(` | HIGH |
+| DT2 | Hardcoded fonts | `fontSize:\s*\d+\|font-size:\s*\d+px` | HIGH |
+| DT3 | Hardcoded spacing | `EdgeInsets\.\w+\(\s*\d+\|\d+px\s*(;\|})` | MEDIUM |
+| DT4 | Hardcoded radii | `BorderRadius\.circular\(\s*\d+\|border-radius:\s*\d+px` | MEDIUM |
+| DT5 | Token reference rate | token_refs / (token_refs + hardcoded) × 100 | — |
 
 ### Category 2: Originality Check (5%)
 
 | # | Anti-Pattern | Grep Signature |
 |---|---|---|
 | OR1 | Purple gradient | `from-purple`, `bg-gradient` |
-| OR2 | Default theme | 커스텀 ThemeData 없이 기본값 |
-| OR3 | Template layout | Hero-Features-Pricing-CTA 패턴 |
-| OR4 | Stock icons only | 커스텀 아이콘 0개 |
+| OR2 | Default theme | Using default values without custom ThemeData |
+| OR3 | Template layout | Hero-Features-Pricing-CTA pattern |
+| OR4 | Stock icons only | Zero custom icons |
 | OR5 | Generic copy | Lorem ipsum, placeholder |
-| OR6 | Excessive nesting | 3단+ 의미 없는 래핑 |
-| OR7 | Uniform spacing | 모든 간격 단일 값 |
+| OR6 | Excessive nesting | 3+ levels of meaningless wrapping |
+| OR7 | Uniform spacing | All spacing uses a single value |
 
 ### Category 3: Craft Quality (10%)
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
-| CR1 | 타이포 계층 완성도 | HIGH |
-| CR2 | 간격 그리드 준수 (4/8px) | HIGH |
-| CR3 | 색상 대비 WCAG AA 4.5:1 | CRITICAL |
-| CR4 | 아이콘 스타일 통일 | MEDIUM |
-| CR5 | 애니메이션 일관성 | LOW |
-| CR6 | border radius 일관성 | MEDIUM |
+| CR1 | Typography hierarchy completeness | HIGH |
+| CR2 | Spacing grid adherence (4/8px) | HIGH |
+| CR3 | Color contrast WCAG AA 4.5:1 | CRITICAL |
+| CR4 | Icon style consistency | MEDIUM |
+| CR5 | Animation consistency | LOW |
+| CR6 | Border radius consistency | MEDIUM |
 
 ### Category 4: State Completeness (15%)
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
-| ST1 | 로딩 상태 UI | HIGH |
-| ST2 | 에러 상태 처리 | HIGH |
-| ST3 | 빈 상태 UI | MEDIUM |
-| ST4 | 폼 유효성 검사 | HIGH |
-| ST5 | 확인 다이얼로그 | MEDIUM |
+| ST1 | Loading state UI | HIGH |
+| ST2 | Error state handling | HIGH |
+| ST3 | Empty state UI | MEDIUM |
+| ST4 | Form validation | HIGH |
+| ST5 | Confirmation dialogs | MEDIUM |
 
 ### Category 5: Accessibility (10%)
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
 | A1 | Semantics/aria-label | HIGH |
-| A2 | 색상 대비 4.5:1 | CRITICAL |
-| A3 | 터치 타겟 48dp/44px | CRITICAL |
-| A4 | 스크린 리더 지원 | HIGH |
-| A5 | 포커스 관리 | MEDIUM |
+| A2 | Color contrast 4.5:1 | CRITICAL |
+| A3 | Touch target 48dp/44px | CRITICAL |
+| A4 | Screen reader support | HIGH |
+| A5 | Focus management | MEDIUM |
 
 ### Category 6: Responsive Layout (8%)
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
-| RL1 | MediaQuery/LayoutBuilder 사용 | HIGH |
-| RL2 | 고정 크기 남용 | MEDIUM |
-| RL3 | overflow 처리 | HIGH |
-| RL4 | 텍스트 오버플로 | MEDIUM |
+| RL1 | MediaQuery/LayoutBuilder usage | HIGH |
+| RL2 | Fixed size overuse | MEDIUM |
+| RL3 | Overflow handling | HIGH |
+| RL4 | Text overflow | MEDIUM |
 
 ### Category 7: Navigation Consistency (7%)
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
-| NV1 | 라우트 정의 일관성 | HIGH |
-| NV2 | 뒤로가기 처리 | MEDIUM |
-| NV3 | 딥링크 지원 | LOW |
-| NV4 | 라우트 깊이 3+ 경고 | LOW |
-| NV5 | 네비게이션 가드 | HIGH |
+| NV1 | Route definition consistency | HIGH |
+| NV2 | Back navigation handling | MEDIUM |
+| NV3 | Deep link support | LOW |
+| NV4 | Route depth 3+ warning | LOW |
+| NV5 | Navigation guards | HIGH |
 
 ### Category 8: Frontend Performance (30%) — CRITICAL
 
-**핵심: "디자인 선택이 성능을 저하시키는가?"**
+**Core question: "Are design choices degrading performance?"**
 
-`/pge-perf`와의 경계: `/pge-perf` = "코드가 느린가?" (DB, 서버). `/pge-front` = "디자인 선택이 느리게 만드는가?" (리빌드, 에셋, 라이브러리).
+Boundary with `/pge-perf`: `/pge-perf` = "Is the code slow?" (DB, server). `/pge-front` = "Are design choices making it slow?" (rebuilds, assets, libraries).
 
-| # | 항목 | 심각도 |
+| # | Item | Severity |
 |---|------|--------|
-| FP1 | 무거운 라이브러리 (번들 크기, 미사용 import, 경량 대체) | HIGH |
-| FP2 | 불필요한 리빌드 (setState 빈도, Consumer/Watch 범위) | CRITICAL |
-| FP3 | 과도한 애니메이션 (AnimationController 동시 수) | MEDIUM |
-| FP4 | 위젯 트리 깊이 (10단+ 중첩) | HIGH |
-| FP5 | 이미지/에셋 미최적화 (원본 로딩, WebP 미사용, 캐싱 없음) | HIGH |
-| FP6 | Provider/State 연쇄 갱신 (ref.invalidate 체인) | CRITICAL |
-| FP7 | 메모리 누수 디자인 (dispose 누락, ListView.builder 미사용) | CRITICAL |
-| FP8 | GPU 오버드로우 (ClipRRect, Opacity, BackdropFilter 남용) | MEDIUM |
+| FP1 | Heavy libraries (bundle size, unused imports, lightweight alternatives) | HIGH |
+| FP2 | Unnecessary rebuilds (setState frequency, Consumer/Watch scope) | CRITICAL |
+| FP3 | Excessive animations (concurrent AnimationController count) | MEDIUM |
+| FP4 | Widget tree depth (10+ levels of nesting) | HIGH |
+| FP5 | Unoptimized images/assets (raw loading, no WebP, no caching) | HIGH |
+| FP6 | Provider/State cascading updates (ref.invalidate chains) | CRITICAL |
+| FP7 | Memory leak design (missing dispose, not using ListView.builder) | CRITICAL |
+| FP8 | GPU overdraw (ClipRRect, Opacity, BackdropFilter overuse) | MEDIUM |
 
 **Flutter Grep:**
 ```
 FP2: setState\(\s*\(\)\s*\{  |  ref\.watch\(  |  Consumer\(
 FP5: Image\.asset\(  |  Image\.network\(
 FP6: ref\.invalidate\(  |  ref\.refresh\(  |  notifyListeners\(
-FP7: StreamSubscription  |  \.listen\(  |  Timer\(  → dispose() 확인
+FP7: StreamSubscription  |  \.listen\(  |  Timer\(  → verify dispose()
 FP8: ClipRRect\(  |  Opacity\(  |  BackdropFilter\(
 ```
 
@@ -194,11 +194,11 @@ Score = Σ (Category Score × Weight)
 
 | Grade | Score | Meaning |
 |-------|-------|---------|
-| A | 90-100 | 프론트 품질 우수 |
-| B | 75-89 | 양호 |
-| C | 60-74 | 주요 이슈 수정 필요 |
-| D | 40-59 | 심각 |
-| F | 0-39 | 디자인 시스템 재구축 권고 |
+| A | 90-100 | Excellent frontend quality |
+| B | 75-89 | Good |
+| C | 60-74 | Major issues need fixing |
+| D | 40-59 | Severe |
+| F | 0-39 | Design system rebuild recommended |
 
 **Hard-fail:** Frontend Performance < 40, Accessibility < 40
 
@@ -206,15 +206,15 @@ Score = Σ (Category Score × Weight)
 
 ## Role Catalog
 
-**필수 3명 항상 포함.** 최대 5명.
+**Always include the 3 required roles.** Maximum 5.
 
-| Role | 담당 | 필수? |
+| Role | Responsibility | Required? |
 |------|------|------|
-| **design-token-auditor** | DT, OR, CR | **필수** |
-| **a11y-auditor** | A11Y, CR(CR3) | **필수** |
-| **front-perf-auditor** | FP 전체 | **필수** |
-| **state-flow-checker** | ST, NV, RL | UI 코드 시 |
-| **ux-pattern-reviewer** | ST, NV, OR | 새 화면 시 |
+| **design-token-auditor** | DT, OR, CR | **Required** |
+| **a11y-auditor** | A11Y, CR(CR3) | **Required** |
+| **front-perf-auditor** | All FP | **Required** |
+| **state-flow-checker** | ST, NV, RL | When UI code present |
+| **ux-pattern-reviewer** | ST, NV, OR | When new screens present |
 
 ---
 
@@ -222,11 +222,11 @@ Score = Σ (Category Score × Weight)
 
 ### STEP 1: Task Analysis + Role Selection
 ```
-필수 출력:
+Required output:
 Front Mode: {Full | Quick | Diff-aware}
 Platform: {Flutter | React | Vue}
 Selected roles: [{role1}, {role2}, ...]
-Rationale: [선택 이유]
+Rationale: [Selection reason]
 ```
 
 ### STEP 2: Create Scanner Team
@@ -236,19 +236,19 @@ TeamCreate → Agent(team_name="pge-front-scan-{slug}", name="{role}", run_in_ba
 
 ### STEP 4: Front Profile Report → `.claude/pge-front/front-profile.md`
 
-**Phase Gate:** Front Health Score + Issue Summary 없으면 Phase 2 진행 불가.
+**Phase Gate:** Cannot proceed to Phase 2 without Front Health Score + Issue Summary.
 
 ### STEP 5: Shutdown Scanner Team
 
 ---
 
-## Phase 2: Fixer — Priority 순서로 수정
+## Phase 2: Fixer — Fix in Priority Order
 
 **Priority Score = Severity × 2 - Effort - Risk** (>= 6: Quick Win, 3-5: Standard, <= 2: Backlog)
 
 Fix Loop: BEFORE → FIX → TEST → AFTER → COMMIT (`fix(front-{cat}): {desc}`)
 
-WTF-likelihood: revert +15%, >3 files +5%, after 15th +1%/fix, unrelated +20%. >= 50% STOP. 하드캡 50.
+WTF-likelihood: revert +15%, >3 files +5%, after 15th +1%/fix, unrelated +20%. >= 50% STOP. Hard cap 50.
 
 Cross-Skill Routing: backend → `/pge`, backend perf → `/pge-perf`, creative → `/pge-design`, code quality → `/pge-qa`
 
@@ -256,24 +256,24 @@ Fix Result → `.claude/pge-front/fix-result.md`
 
 ---
 
-## Phase 3: Verifier — 독립 검증
+## Phase 3: Verifier — Independent Verification
 
-**fresh context Agent subagent 필수.**
+**Fresh context Agent subagent is required.**
 
 ```
 You are the VERIFIER in a frontend QA workflow.
 Be skeptical. Do NOT assume correctness.
 
-Verify: Health Score 재계산, fix 개별 검증, Design System Map walk, regression check.
+Verify: Recalculate Health Score, verify each fix individually, walk Design System Map, regression check.
 
 Devil's Advocate (Frontend):
-1. 토큰 교체가 실제 디자인 시스템 값인가?
-2. 접근성 개선이 형식적 래핑인가?
-3. 컴포넌트 추출이 재사용 가능한가?
-4. 에러/빈 상태 UI가 placeholder인가?
-5. 성능 개선이 기능 회귀를 유발하지 않았는가?
-6. ListView.builder 내부 무거운 연산이 남아있지 않은가?
-7. 이미지 최적화 시 해상도가 수용 가능한가?
+1. Are token replacements actual design system values?
+2. Are accessibility improvements just superficial wrapping?
+3. Are extracted components actually reusable?
+4. Are error/empty state UIs just placeholders?
+5. Did performance improvements cause functional regressions?
+6. Are there still heavy computations inside ListView.builder?
+7. Is the resolution acceptable after image optimization?
 
 Anti-Pattern: Token theater, Semantics spam, Over-abstraction,
 Functionality removal, Builder without benefit, Animation overkill,
@@ -295,18 +295,18 @@ Archive: `.claude/pge-front/history/{YYYYMMDD}T{HHMM}_{slug}.md`
 
 ## Escalation Rules
 
-- 플랫폼/디자인 시스템 미감지 → 사용자 확인
-- 3-strike, 50 fix 하드캡
-- FAIL loop 2+회 → 중단
-- Grade F → 디자인 시스템 재구축 권고
-- Cross-skill > 50% → 해당 skill 먼저 실행
-- 크리에이티브 이슈 다수 → `/pge-design` 전환 권고
+- Platform/design system not detected → User confirmation required
+- 3-strike, 50 fix hard cap
+- FAIL loop 2+ times → Stop
+- Grade F → Design system rebuild recommended
+- Cross-skill > 50% → Run that skill first
+- Multiple creative issues → Recommend switching to `/pge-design`
 
 ## Important Rules
 
-- 필수 출력 없으면 다음 Phase 불가
-- Phase 1 읽기 전용, Phase 2 team lead만 수정
-- Phase 3 fresh context 필수
-- 실제 Grep/Read 측정 필수
-- Before/After 증거 필수
-- design-system-map 갱신 권한 보유
+- Cannot proceed to next Phase without required outputs
+- Phase 1 is read-only, only Phase 2 team lead may modify
+- Phase 3 requires fresh context
+- Actual Grep/Read measurements required
+- Before/After evidence required
+- Has update permissions for design-system-map
