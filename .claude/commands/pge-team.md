@@ -1,7 +1,17 @@
 # /pge-team — PGE Full Protocol with Team Investigation
 
-사용자가 `/pge team`을 붙이면 팀 에이전트를 스폰하여 병렬 조사 후 PGE 프로토콜을 실행한다.
+사용자가 `/pge-team`을 붙이면 팀 에이전트를 스폰하여 병렬 조사 후 PGE 프로토콜을 실행한다.
 복잡한 버그, 크로스 도메인 이슈, 원인 불명 장애에 사용.
+
+## CRITICAL: Agent Spawning Rules
+
+**반드시 아래 규칙을 따를 것:**
+
+1. **TeamCreate를 사용하여 팀을 구성**할 것. 단순 Agent subagent 스폰이 아닌 TeamCreate → Agent(team_name=..., name=...) 패턴을 사용.
+2. **Explore 서브에이전트는 사용하지 말 것.** 모든 teammate는 `general-purpose` agent로 스폰.
+3. **각 teammate는 서로 SendMessage로 발견한 내용을 공유**하면서 진행할 것. 사일로 작업 금지.
+4. **TaskCreate로 작업 목록을 생성**하고 teammate에게 할당할 것.
+5. **모든 teammate는 읽기 전용** — 코드 수정은 team lead (메인 에이전트)만 수행.
 
 ## Input
 
@@ -22,7 +32,7 @@ $ARGUMENTS — 작업 설명
 
 ### STEP 1: Create Investigation Team
 
-TeamCreate로 팀을 생성하고 3명의 전문가 에이전트를 스폰한다.
+**TeamCreate**로 팀을 생성하고, **Agent** tool로 3명의 전문가를 스폰한다. 반드시 `team_name` 파라미터를 지정할 것.
 
 ```
 Team: pge-investigate
@@ -34,9 +44,11 @@ Agents:
 
 #### Agent 1: code-tracer
 
+Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="code-tracer"`, `run_in_background=true` 지정.
+
 스폰 지시:
 ```
-당신은 code-tracer입니다. 버그의 코드 경로를 추적하는 전문가입니다.
+당신은 팀 "pge-investigate"의 code-tracer입니다. 버그의 코드 경로를 추적하는 전문가입니다.
 
 ## 임무
 증상: {사용자가 제공한 증상/로그}
@@ -47,19 +59,24 @@ Agents:
 3. docs/backend-dependency-map.md를 읽고, 영향 받는 테이블의 전체 의존성 체인 파악
 4. 의심되는 코드 경로와 잠재적 결함 지점 식별
 
-## 필수 출력 (history-checker, state-verifier에게 SendMessage로 공유)
+## 필수: 분석 완료 후 반드시 SendMessage로 공유
+history-checker와 state-verifier에게 각각 SendMessage를 보내세요:
 - 추적한 코드 경로 (함수 호출 순서)
 - 의심 지점 (file:line + 이유)
 - 관련 의존성 목록 (dependency map 기반)
 
+다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
 코드를 수정하지 마세요. 분석만 하세요.
+TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
 ```
 
 #### Agent 2: history-checker
 
+Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="history-checker"`, `run_in_background=true` 지정.
+
 스폰 지시:
 ```
-당신은 history-checker입니다. 변경 이력에서 회귀 원인을 찾는 전문가입니다.
+당신은 팀 "pge-investigate"의 history-checker입니다. 변경 이력에서 회귀 원인을 찾는 전문가입니다.
 
 ## 임무
 증상: {사용자가 제공한 증상/로그}
@@ -71,19 +88,24 @@ Agents:
 4. .claude/pge/history/ 디렉토리가 있으면 최근 PGE 기록 확인 — 이전 작업이 원인일 수 있음
 5. 회귀 시점 특정 (언제부터 깨졌는가?)
 
-## 필수 출력 (code-tracer, state-verifier에게 SendMessage로 공유)
+## 필수: 분석 완료 후 반드시 SendMessage로 공유
+code-tracer와 state-verifier에게 각각 SendMessage를 보내세요:
 - 의심 커밋 목록 (hash + 요약 + 이유)
 - 회귀 시점 추정 ("commit X 이후 깨진 것으로 추정")
 - PGE history에서 발견한 관련 기록 (있으면)
 
+다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
 코드를 수정하지 마세요. 분석만 하세요.
+TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
 ```
 
 #### Agent 3: state-verifier
 
+Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="state-verifier"`, `run_in_background=true` 지정.
+
 스폰 지시:
 ```
-당신은 state-verifier입니다. 라이브 시스템 상태를 검증하는 전문가입니다.
+당신은 팀 "pge-investigate"의 state-verifier입니다. 라이브 시스템 상태를 검증하는 전문가입니다.
 
 ## 임무
 증상: {사용자가 제공한 증상/로그}
@@ -95,12 +117,15 @@ Agents:
 4. Edge Function이 관련되면 curl로 응답 확인
 5. 앱 상태 관련이면 Provider/Service 코드에서 쿼리 패턴 확인
 
-## 필수 출력 (code-tracer, history-checker에게 SendMessage로 공유)
+## 필수: 분석 완료 후 반드시 SendMessage로 공유
+code-tracer와 history-checker에게 각각 SendMessage를 보내세요:
 - 실행한 쿼리 + 결과
 - 정상/비정상 판별
 - 발견한 불일치 (스키마 vs 코드, 정책 vs 기대)
 
+다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
 코드를 수정하지 마세요. 검증만 하세요.
+TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
 ```
 
 ### STEP 2: Wait for Team Results
