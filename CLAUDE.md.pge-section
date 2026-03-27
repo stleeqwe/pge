@@ -1,0 +1,230 @@
+## Backend Consistency Protocol (PGE — Planner-Generator-Evaluator)
+
+**All backend-related work MUST follow this protocol. No exceptions.**
+
+This protocol implements the Planner-Generator-Evaluator pattern. Every task goes through all three phases — full verification on every task.
+
+### When PGE Activates
+
+- **Direct task** ("add X to Y") → PGE immediately.
+- **Investigation** ("why is this slow?", "what's broken?") → Investigate and fix autonomously. If backend change needed, auto-transition to PGE. Use `/pge` flag to force the full **Systematic Debugging Protocol** below (4-phase mandatory).
+- **Code review** ("review this", "check recent changes") → Run the **Pre-Landing Review Checklist** below (2-pass: Critical then Informational), apply Fix-First Heuristic for auto-fixable issues, THEN run PGE Evaluator (Phase 3 only) with domain-specific checklists. If issues found, auto-transition to full PGE to fix.
+- **UI-only changes** (no backend impact) → Skip PGE, just run tests + analyze.
+
+**Never ask for permission to proceed.** Show the Sprint Contract as an informational report, then execute immediately. The user will intervene if needed.
+
+### Systematic Debugging Protocol (Investigation Path)
+
+**Iron Law: NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST.**
+
+When entering the Investigation path, follow these 4 phases before transitioning to PGE:
+
+#### Debug Phase 1: Root Cause Investigation
+1. **Collect symptoms**: Error messages, stack traces, reproduction steps
+2. **Read the code path** from symptom back to potential causes
+3. **Check recent changes**: `git log --oneline -20 -- <affected-files>` — regression means root cause is in the diff
+4. **Reproduce deterministically** — if unable, gather more evidence before proceeding
+
+Output: **"Root cause hypothesis: [specific, testable claim]"**
+
+#### Debug Phase 2: Pattern Analysis
+Match against known patterns before forming hypothesis:
+
+| Pattern | Signature | Where to look |
+|---------|-----------|---------------|
+| Race condition | Intermittent, timing-dependent | Concurrent access to shared state |
+| Nil/null propagation | TypeError, NoSuchMethodError | Missing guards on optional values |
+| State corruption | Inconsistent data, partial updates | Transactions, triggers, functions |
+| Integration failure | Timeout, unexpected response | External API calls, DB queries |
+| Configuration drift | Works locally, fails remote | Env vars, deployment config |
+| Stale cache | Shows old data | Real-time subscriptions, state management |
+
+Cross-reference with `docs/backend-dependency-map.md` for dependency-related patterns.
+
+#### Debug Phase 3: Hypothesis Testing
+1. Add temporary log/assertion at suspected root cause → run reproduction
+2. If hypothesis wrong → return to Phase 1, gather more evidence. Do not guess.
+3. **3-strike rule:** If 3 hypotheses fail → **STOP and escalate** (see Escalation Rules)
+4. **Red flags** — slow down if you see: "quick fix for now", fixing before tracing data flow, each fix reveals new problems elsewhere
+
+#### Debug Phase 4: Scope Lock + Transition
+- Note the affected module boundary (e.g., "fix contained to `src/services/order.ts` + related migration")
+- Changes outside this boundary require explicit justification
+- **Backend change needed** → produce Sprint Contract, proceed to PGE Phase 2
+- **Frontend-only** → fix → test → analyze (skip PGE)
+- Output **Debug Report**: Symptom / Root cause / Fix / Evidence / Regression test / Status (DONE | DONE_WITH_CONCERNS | BLOCKED)
+
+### Pre-Landing Review Checklist (Code Review Path)
+
+Two-pass review against `git diff`:
+
+**Pass 1 — CRITICAL (must fix before landing):**
+- SQL injection (string interpolation in queries — use parameterized)
+- TOCTOU races (check-then-set without atomic `WHERE old_status = X` + `UPDATE`)
+- LLM output trust boundary (unvalidated AI output written to DB)
+- Enum completeness (new value added but consumers not updated)
+
+**Pass 2 — INFORMATIONAL (fix or note):**
+- Conditional side effects (branch missing matching side effect)
+- Dead code / stale comments contradicting new code
+- Test gaps (missing negative-path or edge-case tests)
+- Performance (N+1 queries, missing eager loading, heavy dependencies)
+
+**Fix-First Heuristic:**
+- **AUTO-FIX** (apply without asking): dead code, N+1 queries, stale comments, magic numbers, missing input validation
+- **ASK** (needs user input): security changes, race conditions, design decisions, >20 line changes, removing functionality
+
+### Escalation Rules
+
+- **3 failed fix attempts** → STOP, report findings, ask user
+- **Cannot reproduce bug** → gather evidence, do not guess at fix
+- **Scope exceeds understanding** → STOP, request context
+- **PGE FAIL loop** (2+ consecutive FAILs on same task) → escalate, do not continue blindly
+
+Report format:
+- **STATUS**: BLOCKED | NEEDS_CONTEXT
+- **REASON**: [1-2 sentences]
+- **ATTEMPTED**: [what was tried]
+- **RECOMMENDATION**: [next step for user]
+
+### Principles
+
+1. **Dependency map first**: Before any work, read `docs/backend-dependency-map.md` to identify the full blast radius.
+2. **Top-down change order**: Schema → Policies → Functions → Views → Server Functions → App code. Never reverse.
+3. **Prove, don't assume**: Run actual queries and commands to verify. "I believe it works" is not acceptable.
+4. **Separate generation from evaluation**: The evaluator runs in fresh context (Agent subagent) to defeat self-evaluation bias.
+5. **Keep the map current**: If new dependencies are created or existing ones change, update `docs/backend-dependency-map.md` after the task.
+
+### Phase 1: Planner (Before Work)
+
+Produce a **Sprint Contract** — a testable agreement on what will change and how success is verified.
+
+1. Identify which **tables/resources** are affected.
+2. Look up each in `docs/backend-dependency-map.md` and trace the full dependency chain:
+   - Access policies — will permissions change?
+   - Server functions — which functions read/write this resource?
+   - Views/aggregations — do any derived views reference it?
+   - Server-side functions — which endpoints access this resource?
+   - Triggers/hooks — are protected fields being touched?
+   - Real-time subscriptions — are any clients subscribed?
+   - Foreign keys/cascades — will deletions cascade?
+3. Check whether any **cross-domain impact chains** apply.
+4. Write the Sprint Contract to `.claude/pge/contract.md` with:
+   - **Scope**: What changes + what does NOT change (blast radius boundary)
+   - **Acceptance criteria**: Specific runnable verification commands with expected results
+   - **Regression checks**: Fragile dependencies that must NOT break
+   - **Failure criteria**: Symptoms that would indicate breakage
+5. Present the contract as an informational report, then **proceed immediately**.
+
+The `/preflight` skill automates this phase.
+
+### Phase 2: Generator (During Work)
+
+Execute the changes following the strict change order:
+
+```
+1. Schema (create migration / modify data model)
+2. Policies (add/update access policies)
+3. Functions (add/update server-side functions)
+4. Views (recreate derived views)
+5. Server functions (update API endpoints)
+   ── server boundary ──
+6. Apply migrations / deploy server changes
+   ── server boundary checkpoint ──
+   → Run 1-2 critical queries from Sprint Contract acceptance criteria
+   → If smoke test fails → STOP, fix server-side, re-deploy
+   → Do NOT proceed to client code until server is verified
+   ── client boundary ──
+7. Models (update client data classes)
+8. Services (update API calls)
+9. State management (update providers/stores)
+10. UI (update screens)
+11. Tests (write/update + run full suite)
+12. Static analysis (0 errors)
+```
+
+**Rollback Protocol** (if deployment fails mid-execution):
+- **Migration failure**: Use your DB tool's repair command, fix the SQL, re-apply
+- **Partial migration**: Do NOT rollback successful migrations. Fix the failing one and re-apply.
+- **Server function deploy failure**: Previous version remains active. Fix and re-deploy.
+- **Both server + client modified**: Server rollback first, then revert client to match.
+
+After completion, write a **Result Manifest** to `.claude/pge/result.md` with:
+- List of all changed files with brief description
+- Deployment actions taken (with output)
+- Test results (pass/fail counts)
+- Self-assessment of what might be fragile
+- **Noticed Issues** (out of scope): Any non-related problems discovered during work — `[issue] — [file:line] — [severity]`. Not fixed, but flagged for future attention.
+
+### Phase 3: Evaluator (After Work)
+
+Spawn an **Agent subagent with fresh context** to independently verify the work.
+
+The evaluator:
+1. Reads the sprint contract, result manifest, and dependency map
+2. Runs ALL acceptance criteria from the contract
+3. Walks the dependency map entry-by-entry for every affected resource
+4. Answers the Devil's Advocate Checklist
+5. Checks for common anti-patterns
+6. Scores 5 dimensions (1-10)
+7. Issues verdict: **PASS** / **CONDITIONAL PASS** / **FAIL**
+
+**Hard-fail rules** (automatic FAIL, no exceptions):
+- Security/Access Policy score < 6
+- Dependency Consistency score < 6
+
+**Feedback loop**:
+- **FAIL**: Fix all remediation items → run evaluator again (fresh context)
+- **CONDITIONAL PASS**: Fix specific items listed → task complete (no re-evaluation)
+- **PASS**: Task complete
+
+The `/evaluate` skill automates this phase.
+
+### State Files & History
+
+PGE state files live in `.claude/pge/` (gitignored):
+```
+.claude/pge/
+├── contract.md   # Sprint contract (Planner output) — current task
+├── result.md     # Result manifest (Generator output) — current task
+├── eval.md       # Evaluation report (Evaluator output) — current task
+└── history/      # Archived PGE records — persistent across tasks
+```
+
+**After Phase 3 completes with PASS or CONDITIONAL PASS**, archive the PGE record:
+1. Create: `.claude/pge/history/{ISO-date}T{time}_{task-slug}.md`
+2. Contents: Contract summary + Evaluator verdict + scores + issues found
+3. Keep concise — under 100 lines.
+
+**When debugging regressions**, read `.claude/pge/history/` to find which past task may have introduced the issue.
+
+### Commit Messages
+
+When committing PGE-managed work, include PGE context:
+
+```
+feat: add color field to items
+
+PGE Contract: items.color (TEXT), get_nearby_items, admin_item_overview
+PGE Boundary: get_chat_list (no impact), trades (no impact)
+PGE Verdict: PASS (Schema:9, Security:8, Deps:9, Tests:8, Deploy:10)
+```
+
+### High-Risk Change Matrix
+
+<!-- PROJECT-SPECIFIC: Fill in your project's high-risk targets -->
+
+| Target | Risk | Blast Radius | Must Verify |
+|--------|------|-------------|-------------|
+| <!-- e.g., users.email --> | CRITICAL | <!-- e.g., 10+ functions --> | <!-- e.g., auth flow, all JOINs --> |
+| <!-- e.g., orders state machine --> | HIGH | <!-- e.g., payment, notifications --> | <!-- e.g., state transitions --> |
+
+### Devil's Advocate Checklist (Evaluator Must Answer)
+
+1. What dependency did the Generator most likely skip?
+2. Is the most fragile query/function still working? (Always run it.)
+3. Did the Generator DROP views before recreating? (Most DBs cannot ALTER view columns.)
+4. Are there new fields that should be in the dependency map but aren't?
+5. Did the Generator actually deploy, or just write code?
+6. Could this change silently break access policies?
+7. Does the migration handle existing data? (NOT NULL needs DEFAULT or backfill.)

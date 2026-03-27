@@ -1,0 +1,2 @@
+# PGE workflow state files (ephemeral per-task)
+.claude/pge/
