@@ -41,10 +41,10 @@ Every backend change goes through three phases:
 
 ```bash
 # From your project root:
-bash <(curl -s https://raw.githubusercontent.com/pukaworks/pge/main/setup.sh)
+bash <(curl -s https://raw.githubusercontent.com/stleeqwe/pge/main/setup.sh)
 
 # Or clone and run locally:
-git clone https://github.com/pukaworks/pge.git
+git clone https://github.com/stleeqwe/pge.git
 cd your-project
 bash ../pge/setup.sh
 ```
