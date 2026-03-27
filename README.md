@@ -1,6 +1,6 @@
 # PGE — Planner-Generator-Evaluator for Claude Code
 
-Backend consistency skills for [Claude Code](https://claude.ai/code). Plan the blast radius, execute in strict order, verify with an independent evaluator agent.
+Backend consistency and performance optimization skills for [Claude Code](https://claude.ai/code). Plan the blast radius, execute in strict order, verify with independent evaluator agents.
 
 ## Install
 
@@ -10,11 +10,11 @@ bash /tmp/pge/install.sh
 rm -rf /tmp/pge
 ```
 
-This installs two global skills to `~/.claude/skills/`. They work in **every project** — no per-project setup needed.
+This installs three global skills to `~/.claude/skills/`. They work in **every project** — no per-project setup needed.
 
 ## Usage
 
-Append `/pge` or `/pge-team` to any task:
+Append a flag to any task:
 
 ```
 # Single agent — full protocol
@@ -22,6 +22,9 @@ fix the follow sync bug /pge
 
 # Team investigation — 3 agents in parallel
 fix the follow sync bug /pge-team
+
+# Performance optimization — profile, optimize, benchmark
+optimize the chat list /pge-perf
 ```
 
 Without the flag, Claude works autonomously (fast mode).
@@ -63,6 +66,24 @@ Same protocol, but spawns a **team of 3 specialist agents** using TeamCreate:
 
 Agents share findings via **SendMessage** and converge on root cause before the fix.
 
+### `/pge-perf` — Performance Optimization
+
+Three-phase protocol: **Profile → Optimize → Benchmark**
+
+Always runs as a team (TeamCreate):
+
+| Agent | Layer | Role |
+|-------|-------|------|
+| query-profiler | DB | EXPLAIN ANALYZE, missing indexes, N+1, lock contention |
+| code-analyzer | Server + Client | Cold starts, payload size, rebuilds, memory leaks |
+| load-tester | Network | Duplicate calls, missing pagination, caching gaps |
+
+**Phase 1 (Profiler):** Team profiles 4 layers in parallel → Performance Profile Report
+**Phase 2 (Optimizer):** Priority Matrix (Impact×2 - Effort - Risk) → Quick Wins first
+**Phase 3 (Benchmarker):** Fresh context agent re-measures all metrics → before/after proof
+
+Verdicts: IMPROVED / MARGINAL / NO_CHANGE / REGRESSION
+
 ## First Run
 
 On first `/pge` in a new project, it auto-creates:
@@ -86,14 +107,21 @@ The dependency map is updated on every PGE run as new dependencies are discovere
 ~/.claude/skills/
 ├── pge/
 │   └── SKILL.md       # /pge skill
-└── pge-team/
-    └── SKILL.md       # /pge-team skill
+├── pge-team/
+│   └── SKILL.md       # /pge-team skill
+└── pge-perf/
+    └── SKILL.md       # /pge-perf skill
 
 your-project/          # Auto-created on first run
-├── .claude/pge/       # Ephemeral state (gitignored)
+├── .claude/pge/       # PGE state (gitignored)
 │   ├── contract.md
 │   ├── result.md
 │   ├── eval.md
+│   └── history/
+├── .claude/pge-perf/  # Perf state (gitignored)
+│   ├── perf-target.md
+│   ├── optimization-result.md
+│   ├── benchmark-eval.md
 │   └── history/
 └── docs/
     └── backend-dependency-map.md
