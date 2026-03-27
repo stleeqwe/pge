@@ -63,6 +63,47 @@ Token files: {color, typography, spacing, radius, shadow — 각 존재 여부}
 
 플랫폼과 디자인 시스템이 감지되지 않으면 다음 Phase 진행 불가.
 
+### Design System Map 초기화
+
+`docs/design-system-map.md`가 없으면 사용자에게 알림:
+> "Design System Map이 없습니다. 프로젝트를 분석하여 `docs/design-system-map.md`를 생성할까요?"
+
+사용자가 승인하면 프로젝트를 분석하여 자동 생성:
+
+```markdown
+# Design System Map
+
+## Tokens
+| Category | File | Tokens | Used By (screens) |
+|----------|------|--------|-------------------|
+| Color | lib/core/theme/colors.dart | primary, secondary, surface, ... | all |
+| Typography | lib/core/theme/typography.dart | heading, body, caption, ... | all |
+| Spacing | lib/core/theme/spacing.dart | xs, sm, md, lg, xl, ... | all |
+| Radius | lib/core/theme/radius.dart | card, button, chip, sheet, ... | all |
+
+## Shared Components
+| Component | File | Used By (screens) | Props/Variants |
+|-----------|------|--------------------|----------------|
+| LeafitButton | lib/shared/widgets/button.dart | 12 screens | primary, secondary, text |
+| ... | ... | ... | ... |
+
+## Screens
+| Screen | File | Components Used | Tokens Direct | Status |
+|--------|------|----------------|---------------|--------|
+| HomeScreen | lib/features/home/... | LeafitButton, ItemCard | 3 hardcoded | needs-review |
+| ... | ... | ... | ... | ... |
+
+## Cross-Screen Patterns
+| Pattern | Screens | Consistent? |
+|---------|---------|------------|
+| AppBar style | all | Y/N |
+| Card layout | home, profile, chat | Y/N |
+| Empty state | feed, search, chat | Y/N |
+| Error state | all async screens | Y/N |
+```
+
+이 맵은 매 `/pge-design` 실행 시 갱신된다. Phase 1(Analyst)이 맵을 읽고 분석 범위를 결정하고, Phase 3(Evaluator)이 맵 항목별로 검증한다.
+
 ## CRITICAL: Agent Spawning Rules
 
 1. **TeamCreate를 사용하여 팀을 구성**할 것. 단순 Agent subagent 스폰이 아닌 TeamCreate → Agent(team_name=..., name=...) 패턴.
