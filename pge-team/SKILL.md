@@ -1,10 +1,11 @@
 ---
 name: pge-team
 description: |
-  PGE Full Protocol with Team Investigation. Spawns a team of specialist agents
-  (code-tracer, history-checker, state-verifier) using TeamCreate that investigate
-  in parallel, share findings via SendMessage, then synthesize root cause.
-  Use for complex bugs, cross-domain issues, or unclear failures.
+  PGE Full Protocol with Team Investigation. Orchestrator analyzes the task,
+  selects appropriate specialist roles from a catalog, and spawns a team using
+  TeamCreate. Agents investigate in parallel, share findings via SendMessage,
+  then synthesize results. Use for complex bugs, cross-domain issues, or
+  large-scale tasks that benefit from parallel analysis.
 allowed-tools:
   - Bash
   - Read
@@ -22,8 +23,7 @@ allowed-tools:
 
 # /pge-team — PGE Full Protocol with Team Investigation
 
-사용자가 `/pge-team`을 붙이면 팀 에이전트를 스폰하여 병렬 조사 후 PGE 프로토콜을 실행한다.
-복잡한 버그, 크로스 도메인 이슈, 원인 불명 장애에 사용.
+사용자가 `/pge-team`을 붙이면 오케스트레이터가 task를 분석하여 적합한 역할을 선택하고, 팀을 스폰하여 병렬 조사 후 PGE 프로토콜을 실행한다.
 
 ## CRITICAL: Agent Spawning Rules
 
@@ -39,219 +39,202 @@ allowed-tools:
 
 $ARGUMENTS — 작업 설명
 
-## Task Type Detection
+---
 
-`/pge`와 동일한 방식으로 유형 판별:
+## STEP 1: Task Analysis + Role Selection
+
+### 1-1. Task Type Detection
+
+작업 설명을 분석하여 유형 판별:
 - **Investigation** — 증상/버그/에러 키워드
 - **Direct task** — 추가/변경/삭제 키워드
 - **Code review** — 리뷰 키워드
+- **Architecture/Design** — 설계/구조/리팩토링 키워드
 
-판별 결과를 출력: `PGE Team Mode: {Investigation | Direct | Review}`
+### 1-2. Scope Analysis
+
+작업이 어떤 영역에 걸치는지 파악:
+- 영향 받는 레이어 (DB, Server, Client, Network)
+- 영향 받는 도메인 수 (단일 vs 크로스 도메인)
+- 관련 파일/모듈 범위
+
+### 1-3. Role Selection
+
+아래 **Role Catalog**에서 task에 적합한 역할을 **2~4명** 선택한다.
+불필요한 역할은 스폰하지 않는다.
+
+**필수 출력:**
+```
+PGE Team Mode: {Investigation | Direct | Review | Architecture}
+Selected roles: [{role1}, {role2}, ...]
+Rationale: [왜 이 역할들이 필요한지 한 줄]
+```
 
 ---
 
-## Investigation Mode (Team)
+## Role Catalog
 
-### STEP 1: Create Investigation Team
+오케스트레이터는 아래 카탈로그에서 task에 맞는 역할을 선택한다. 카탈로그에 없는 역할을 task에 맞게 새로 정의해도 된다.
 
-**TeamCreate**로 팀을 생성하고, **Agent** tool로 3명의 전문가를 스폰한다. 반드시 `team_name` 파라미터를 지정할 것.
+### Investigation Roles
+
+| Role | 전문 영역 | 언제 선택 |
+|------|----------|----------|
+| **code-tracer** | 코드 경로 추적, 호출 체인 분석, dependency map 확인 | 버그의 코드 경로가 불명확할 때 |
+| **history-checker** | git log, commit diff, PGE history 분석, 회귀 시점 특정 | "갑자기 안 됨", 회귀 의심 시 |
+| **state-verifier** | 라이브 DB/서버 상태 SQL 검증, RLS 정책 확인 | DB 상태 불일치, 데이터 문제 의심 시 |
+| **log-analyst** | 에러 로그, 스택 트레이스 분석, 패턴 매칭 | 에러 로그가 제공됐을 때 |
+
+### Direct Task Roles
+
+| Role | 전문 영역 | 언제 선택 |
+|------|----------|----------|
+| **dep-checker** | dependency map 기반 blast radius 분석, contract 누락 확인 | 백엔드 변경 시 |
+| **risk-assessor** | High-Risk Change Matrix 대조, 숨은 영향 식별 | CRITICAL/HIGH 리스크 테이블 변경 시 |
+| **schema-analyst** | DB 스키마, 마이그레이션, 제약조건 분석 | 스키마 변경 포함 시 |
+| **api-analyst** | Edge Function/API 엔드포인트 영향 분석 | 서버 함수 변경 시 |
+
+### Review Roles
+
+| Role | 전문 영역 | 언제 선택 |
+|------|----------|----------|
+| **security-reviewer** | SQL injection, TOCTOU, RLS, LLM trust boundary | 보안 민감 변경 시 |
+| **quality-reviewer** | dead code, test gaps, N+1, 코드 품질 | 일반 코드 리뷰 시 |
+| **ux-reviewer** | UI 일관성, 접근성, 사용자 경험 | 프론트엔드 변경 포함 시 |
+
+### Architecture Roles
+
+| Role | 전문 영역 | 언제 선택 |
+|------|----------|----------|
+| **arch-analyst** | 현재 아키텍처 분석, 패턴 파악, 제약 조건 식별 | 구조 변경/리팩토링 시 |
+| **impact-mapper** | 변경의 전체 영향 범위 매핑, 의존성 추적 | 대규모 변경 시 |
+| **test-strategist** | 테스트 전략 수립, 커버리지 분석, 테스트 계획 | 테스트 부족 영역 작업 시 |
+
+### Selection Guidelines
+
+- **최소 2명, 최대 4명** — 1명이면 팀이 아니고, 5명 이상이면 조율 오버헤드
+- **역할 중복 금지** — 같은 영역을 두 명이 하지 않음
+- **교차 검증 가능하도록** — 서로 다른 관점에서 같은 문제를 볼 수 있는 조합
+- **카탈로그 외 역할** — task에 딱 맞는 역할이 없으면 새로 정의 가능. 이 경우 role name, 전문 영역, 수행 항목을 명시
+
+---
+
+## STEP 2: Create Team
+
+**TeamCreate**로 팀을 생성하고, 선택된 역할별로 **Agent** tool로 스폰.
+
+모든 Agent 스폰 시 반드시 지정:
+- `team_name="pge-team-{task-slug}"`
+- `name="{role-name}"`
+- `run_in_background=true`
+
+### Agent 프롬프트 템플릿
+
+각 에이전트에게 아래 구조로 프롬프트를 작성:
 
 ```
-Team: pge-investigate
-Agents:
-  1. code-tracer    — 코드 경로 추적 + 의존성 분석
-  2. history-checker — git/변경 이력 + PGE history 분석
-  3. state-verifier  — 라이브 상태 검증 (DB 쿼리, 서버 상태)
-```
-
-#### Agent 1: code-tracer
-
-Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="code-tracer"`, `run_in_background=true` 지정.
-
-스폰 지시:
-```
-당신은 팀 "pge-investigate"의 code-tracer입니다. 버그의 코드 경로를 추적하는 전문가입니다.
+당신은 팀 "{team_name}"의 {role-name}입니다. {전문 영역 한 줄 설명}.
 
 ## 임무
-증상: {사용자가 제공한 증상/로그}
+{task 설명 + 사용자 제공 정보 (로그, 증상 등)}
 
-다음을 수행하세요:
-1. 증상에서 언급된 파일/함수를 Read로 읽기
-2. 해당 함수의 호출 체인을 Grep으로 추적 (caller → callee)
-3. docs/backend-dependency-map.md를 읽고, 영향 받는 테이블의 전체 의존성 체인 파악
-4. 의심되는 코드 경로와 잠재적 결함 지점 식별
+## 수행 항목
+{해당 역할에 맞는 구체적 수행 항목 3-7개}
 
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-history-checker와 state-verifier에게 각각 SendMessage를 보내세요:
-- 추적한 코드 경로 (함수 호출 순서)
-- 의심 지점 (file:line + 이유)
-- 관련 의존성 목록 (dependency map 기반)
+## 필수: SendMessage 규칙
+분석 완료 후 다른 모든 teammate에게 각각 SendMessage를 보내세요:
+- {해당 역할의 핵심 발견사항 형식}
 
 다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
 코드를 수정하지 마세요. 분석만 하세요.
 TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
 ```
 
-#### Agent 2: history-checker
+---
 
-Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="history-checker"`, `run_in_background=true` 지정.
+## STEP 3: Wait for Team Results
 
-스폰 지시:
-```
-당신은 팀 "pge-investigate"의 history-checker입니다. 변경 이력에서 회귀 원인을 찾는 전문가입니다.
-
-## 임무
-증상: {사용자가 제공한 증상/로그}
-
-다음을 수행하세요:
-1. git log --oneline -30 — 최근 커밋 확인
-2. 증상과 관련된 파일의 최근 변경: git log --oneline -20 -- <affected-files>
-3. 의심 커밋의 diff 확인: git show <commit>
-4. .claude/pge/history/ 디렉토리가 있으면 최근 PGE 기록 확인 — 이전 작업이 원인일 수 있음
-5. 회귀 시점 특정 (언제부터 깨졌는가?)
-
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-code-tracer와 state-verifier에게 각각 SendMessage를 보내세요:
-- 의심 커밋 목록 (hash + 요약 + 이유)
-- 회귀 시점 추정 ("commit X 이후 깨진 것으로 추정")
-- PGE history에서 발견한 관련 기록 (있으면)
-
-다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
-코드를 수정하지 마세요. 분석만 하세요.
-TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
-```
-
-#### Agent 3: state-verifier
-
-Agent tool 호출 시 반드시 `team_name="pge-investigate"`, `name="state-verifier"`, `run_in_background=true` 지정.
-
-스폰 지시:
-```
-당신은 팀 "pge-investigate"의 state-verifier입니다. 라이브 시스템 상태를 검증하는 전문가입니다.
-
-## 임무
-증상: {사용자가 제공한 증상/로그}
-
-다음을 수행하세요:
-1. 증상과 관련된 DB 상태를 SQL로 검증 (MCP execute_sql 또는 CLI)
-2. 관련 서버 함수 실행하여 정상 동작 여부 확인
-3. 접근 정책이 올바른지 확인
-4. API 엔드포인트가 관련되면 curl로 응답 확인
-5. 앱 상태 관련이면 서비스/상태관리 코드에서 쿼리 패턴 확인
-
-## 필수: 분석 완료 후 반드시 SendMessage로 공유
-code-tracer와 history-checker에게 각각 SendMessage를 보내세요:
-- 실행한 쿼리 + 결과
-- 정상/비정상 판별
-- 발견한 불일치 (스키마 vs 코드, 정책 vs 기대)
-
-다른 teammate에게서 메시지가 오면 내용을 반영하여 분석을 보강하세요.
-코드를 수정하지 마세요. 검증만 하세요.
-TaskUpdate로 할당된 Task를 in_progress → completed 처리하세요.
-```
-
-### STEP 2: Wait for Team Results
-
-3명의 에이전트가 SendMessage로 서로 발견사항을 공유하며 분석을 진행한다.
+모든 에이전트가 SendMessage로 서로 발견사항을 공유하며 분석을 진행한다.
 모든 에이전트의 분석이 완료되면 결과를 종합한다.
 
-### STEP 3: Synthesize Root Cause
+---
 
-3명의 분석 결과를 종합하여 다음을 출력:
+## STEP 4: Synthesize Results
+
+팀 분석 결과를 종합하여 출력:
 
 ```
 ═══ TEAM INVESTIGATION RESULT ═══
 
-code-tracer 발견:
-  [코드 경로 요약 + 의심 지점]
+{role-1} 발견:
+  [핵심 발견사항 요약]
 
-history-checker 발견:
-  [회귀 시점 + 의심 커밋]
+{role-2} 발견:
+  [핵심 발견사항 요약]
 
-state-verifier 발견:
-  [라이브 상태 검증 결과]
+{role-N} 발견:
+  [핵심 발견사항 요약]
 
-═══ ROOT CAUSE SYNTHESIS ═══
+═══ SYNTHESIS ═══
 
-Root cause hypothesis: [3명의 분석을 종합한 최종 가설]
+Conclusion: [팀 분석을 종합한 결론]
 Confidence: {HIGH | MEDIUM | LOW}
-Pattern match: {매칭된 패턴}
 Scope: [영향 받는 모듈 경계]
-Backend change needed: {Y/N}
+Backend change needed: {Y/N}  (Investigation/Direct 시)
 ```
 
-**Confidence가 LOW인 경우**: 에이전트를 추가 투입하거나 사용자에게 에스컬레이션.
+**Confidence가 LOW인 경우**: 추가 역할 투입 또는 사용자 에스컬레이션.
 
-### STEP 4: Shutdown Team
+---
+
+## STEP 5: Shutdown Team
 
 분석 완료 후 모든 에이전트에게 shutdown_request를 보내고 팀 정리.
 
-### STEP 5: Execute Fix
+---
 
-종합된 Root cause를 기반으로 `/pge`의 해당 모드 실행:
-- **Backend change needed: Y** → Planner → Generator → Evaluator
-- **Backend change needed: N** → Fix → Test → Analyze
+## STEP 6: Execute
 
-### STEP 6: Debug Report
+종합된 결과를 기반으로 실행:
+
+### Investigation
+- **Backend change needed: Y** → `/pge`의 Planner → Generator → Evaluator
+- **Backend change needed: N** → Fix → Test → Analyze → Debug Report
+
+### Direct Task
+- Planner → Generator → Evaluator (팀 분석으로 보강된 Sprint Contract 사용)
+
+### Review
+- 팀 리뷰 결과 기반으로 이슈 수정 → Evaluator
+- 이슈 없으면 완료
+
+### Architecture
+- 설계 문서 출력 → 사용자 확인 → 구현
+
+---
+
+## STEP 7: Final Report
 
 ```
-DEBUG REPORT (Team Investigation)
+PGE TEAM REPORT
 ════════════════════════════════════════
-Symptom:         [사용자가 보고한 증상]
-Root cause:      [팀이 종합한 실제 원인]
-Pattern:         [매칭된 패턴]
-Contributors:    code-tracer, history-checker, state-verifier
-Fix:             [변경 내용, file:line 참조]
-Evidence:        [테스트 결과, 재현 확인]
-Regression test: [새로 추가된 테스트 file:line]
+Task:            [작업 설명]
+Mode:            {Investigation | Direct | Review | Architecture}
+Team:            [{role1}, {role2}, ...]
+Date:            {ISO timestamp}
+
+── Team Analysis ──
+{각 역할의 핵심 발견 1줄씩}
+
+── Action Taken ──
+{수행한 작업 요약}
+
+── Result ──
+{결과 요약}
+
 Status:          DONE | DONE_WITH_CONCERNS | BLOCKED
 ════════════════════════════════════════
 ```
-
----
-
-## Direct Task Mode (Team)
-
-대규모 직접 작업에서 팀을 활용한다.
-
-### STEP 1: Sprint Contract 생성
-`/pge`의 Planner 절차를 따라 Sprint Contract 작성.
-
-### STEP 2: Team Blast Radius Verification
-**TeamCreate**로 2명의 에이전트를 스폰하여 contract를 교차 검증:
-
-```
-Agent 1: dep-checker  — dependency map 기반으로 contract 누락 확인
-Agent 2: risk-assessor — High-Risk Change Matrix 대조, 숨은 영향 식별
-```
-
-두 에이전트가 SendMessage로 발견사항을 공유하고, contract 보완 필요 시 수정.
-
-### STEP 3: Generator
-`/pge`의 Generator 절차를 따라 실행. Server Boundary Checkpoint 필수.
-
-### STEP 4: Evaluator
-독립 Evaluator Agent로 검증.
-
----
-
-## Review Mode (Team)
-
-### STEP 1: Team Code Review
-**TeamCreate**로 2명의 에이전트를 스폰하여 병렬 리뷰:
-
-```
-Agent 1: security-reviewer — Pass 1 CRITICAL 항목 집중 (SQL injection, TOCTOU, LLM trust)
-Agent 2: quality-reviewer  — Pass 2 INFORMATIONAL 항목 집중 (dead code, test gaps, perf)
-```
-
-두 에이전트가 SendMessage로 발견사항을 공유하고, 종합 리뷰 결과를 출력.
-
-### STEP 2: Evaluator (Phase 3 only)
-Domain-specific checklists로 검증.
-
-### STEP 3: 이슈 발견 시
-자동으로 Direct Task Mode 전환.
 
 ---
 
@@ -260,5 +243,6 @@ Domain-specific checklists로 검증.
 - 모든 에이전트는 **코드를 수정하지 않음** — 분석/검증만 수행
 - 에이전트 간 **SendMessage로 발견사항을 반드시 공유** — 사일로 금지
 - 분석 완료 후 **반드시 팀 shutdown** — 리소스 정리
-- 수정은 항상 **team lead (메인 에이전트)가 수행** — 에이전트는 읽기 전용
-- Escalation Rules 동일 적용: 3-strike, PGE FAIL loop 2+회 시 중단
+- 수정은 항상 **team lead (메인 에이전트)만 수행**
+- 역할 선택에 **Rationale 필수** — 왜 이 역할이 필요한지 명시
+- Escalation: 3-strike, PGE FAIL loop 2+회 시 중단
