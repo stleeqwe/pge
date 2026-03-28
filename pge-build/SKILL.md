@@ -785,10 +785,15 @@ Post-Build Recommendations:
 - **Any phase**: Platform Unknown → Ask user to specify
 - **Cross-skill**: > 50% issues in one domain → Recommend that PGE skill first
 
+## Database Interaction Priority
+
+**MCP-first rule: When Supabase MCP (or any DB MCP) is available, ALWAYS use it over CLI.** MCP provides direct, faster, and more reliable DB access. Only fall back to CLI if MCP tool call explicitly fails. This applies to architecture validation (schema queries), migration application, and acceptance verification.
+
 ## Important Rules
 
 - Cannot proceed to next Phase without required outputs
 - `/pge-build` tasks cannot skip the protocol
+- **MCP-first**: Always use Supabase MCP over CLI when available
 - Phase 0 agents are read-only — no code creation
 - Phase 1: team lead builds sequentially — no parallel sprints
 - Phase 2 Acceptor: fresh context Agent subagent mandatory

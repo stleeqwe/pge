@@ -371,8 +371,27 @@ Automatically transition to Direct Task Mode → Planner → Generator → Evalu
 
 ---
 
+## Database Interaction Priority
+
+**MCP-first rule: When Supabase MCP (or any DB MCP) is available, ALWAYS use it over CLI.**
+
+| Operation | MCP Available | MCP Unavailable |
+|-----------|--------------|-----------------|
+| Schema queries | `execute_sql` | `supabase db` CLI |
+| RLS/policy check | `execute_sql` | `supabase db` CLI |
+| RPC verification | `execute_sql` | `supabase db` CLI |
+| Migration apply | `apply_migration` | `supabase db push` |
+| Function deploy | MCP deploy tool | `supabase functions deploy` |
+| View verification | `execute_sql` | `supabase db` CLI |
+| Data queries | `execute_sql` | `supabase db` CLI |
+
+**Never default to CLI when MCP is connected.** MCP provides direct, faster, and more reliable DB access. Only fall back to CLI if MCP tool call explicitly fails.
+
+This rule applies to ALL phases: Planner (blast radius verification), Generator (deployment), and Evaluator (acceptance criteria execution).
+
 ## Important Rules
 
 - Cannot proceed to the next Phase without each Phase's **required output**
 - `/pge` tasks **cannot skip the protocol**
+- **MCP-first**: Always use Supabase MCP over CLI when available
 - Escalation: Stop after 3-strike or 2+ PGE FAIL loops

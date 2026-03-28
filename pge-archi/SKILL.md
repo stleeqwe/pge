@@ -337,10 +337,15 @@ Diagrams must reflect CURRENT code, be verifiable, include a legend, and be stor
 - Security HARD FAIL → Mandatory remediation
 - Cross-skill > 50% → Run relevant PGE skill first
 
+## Database Interaction Priority
+
+**MCP-first rule: When Supabase MCP (or any DB MCP) is available, ALWAYS use it over CLI.** MCP provides direct, faster, and more reliable DB access. Only fall back to CLI if MCP tool call explicitly fails.
+
 ## Important Rules
 
 - Required output missing → cannot proceed to next Phase
 - `/pge-archi` tasks cannot skip the protocol
+- **MCP-first**: Always use Supabase MCP over CLI when available
 - Phase 1 agents must not modify code
 - Phase 2: team lead only, atomic commits
 - Phase 3: fresh context Agent subagent

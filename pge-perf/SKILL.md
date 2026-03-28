@@ -514,10 +514,15 @@ Create `.claude/pge-perf/history/{YYYYMMDD}T{HHMM}_{target-slug}.md` (under 100 
 
 ---
 
+## Database Interaction Priority
+
+**MCP-first rule: When Supabase MCP (or any DB MCP) is available, ALWAYS use it over CLI.** MCP provides direct, faster, and more reliable DB access. Only fall back to CLI if MCP tool call explicitly fails. This applies to all profiling queries (EXPLAIN ANALYZE, pg_stat_statements, index usage, etc.).
+
 ## Important Rules
 
 - If the **required output** for any Phase is missing, the next Phase cannot proceed
 - `/pge-perf` tasks **cannot skip the protocol**
+- **MCP-first**: Always use Supabase MCP over CLI when available
 - Phase 1 agents **do not modify code** — analysis/measurement only
 - Agents **must share findings via SendMessage** — siloed work is prohibited
 - After analysis is complete, **the team must be shut down** — clean up resources
